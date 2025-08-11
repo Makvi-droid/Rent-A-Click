@@ -166,7 +166,7 @@ function Hero() {
               textShadow: '0 2px 10px rgba(0,0,0,0.5)'
             }}
           >
-            Professional camera equipment at your fingertips. From DSLRs to cinema cameras, 
+            Camera equipment at your fingertips. From DSLRs to cinema cameras, 
             we make professional photography accessible to everyone.
           </p>
         </div>
@@ -187,13 +187,7 @@ function Hero() {
             </span>
           </button>
           
-          <button className="group relative flex items-center space-x-4 text-white border-2 border-purple-400/50 backdrop-blur-sm px-12 py-5 rounded-full text-lg font-bold hover:bg-purple-500/20 hover:border-purple-300 transition-all duration-500 transform hover:scale-110 hover:shadow-xl">
-            <div className="relative">
-              <Play className="w-6 h-6 relative z-10" />
-              <div className="absolute inset-0 bg-purple-400/50 rounded-full blur-md group-hover:blur-lg transition-all duration-300" />
-            </div>
-            <span>Watch Demo</span>
-          </button>
+          
         </div>
 
         {/* Enhanced Scroll Indicator */}

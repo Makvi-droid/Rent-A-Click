@@ -1,11 +1,10 @@
 import React from 'react'
-import Hero from '../components/Hero'
-import Navigation from '../components/Navigation'
-import Featured from '../components/Featured'
-import Services from '../components/Services'
-import About from '../components/About'
-import CTA from '../components/CTA'
-import Footer from '../components/Footer'
+import Hero from '../components/Landing/Hero'
+import Navigation from '../components/Landing/Navigation'
+import Featured from '../components/Landing/Featured'
+import Services from '../components/Landing/Services'
+import About from '../components/Landing/About'
+import Footer from '../components/Landing/Footer'
 
 export default function LandingPage() {
   return (
@@ -15,7 +14,6 @@ export default function LandingPage() {
         <Featured/>
         <Services/>
         <About/>
-        <CTA/>
         <Footer/>
     </div>
   )
