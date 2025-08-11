@@ -63,7 +63,7 @@ export default function Featured() {
   ];
 
   const StarIcon = ({ filled }) => (
-    <i className={`fas ${filled ? 'fa-star' : 'fa-star'} ${filled ? 'text-teal-600' : 'text-gray-300'}`}></i>
+    <i className={`fas ${filled ? 'fa-star' : 'fa-star'} ${filled ? 'text-[#52b788]' : 'text-gray-300'}`}></i>
   );
 
   const renderStars = (rating) => {
@@ -135,7 +135,7 @@ export default function Featured() {
                   <span className="text-gray-600 text-sm"> / day</span>
                 </div>
                 <div className="mt-2 flex items-center">
-                  <span className="text-teal-600 font-semibold flex items-center">
+                  <span className="text-[#52b788] font-semibold flex items-center">
                     {renderStars(rating)}
                   </span>
                   <span className="ml-2 text-gray-600 text-sm">{reviews} reviews</span>
