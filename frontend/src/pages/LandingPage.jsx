@@ -8,6 +8,7 @@ import Footer from '../components/Landing/Footer'
 
 export default function LandingPage() {
   return (
+
     <div>
         <Navigation/>
         <Hero/>
