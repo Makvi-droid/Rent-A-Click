@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Play, Star, Shield, Clock, Zap, ArrowRight, Menu, X, ChevronDown, Sparkles, Link } from 'lucide-react';
-import { useNavigate } from "react-router-dom";
+import { Camera, Play, Star, Shield, Clock, Zap, ArrowRight, Menu, X, ChevronDown, Sparkles } from 'lucide-react';
 
 function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -122,8 +120,7 @@ function Navigation() {
               ))}
               
               {/* Enhanced CTA Button */}
-             
-              <button className="relative bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-3 rounded-full font-medium overflow-hidden group transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-purple-500/25" onClick={() => navigate("/auth")}>
+              <button className="relative bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-3 rounded-full font-medium overflow-hidden group transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-purple-500/25">
                 {/* Button content */}
                 <span className="relative z-10 flex items-center space-x-2">
                   <span>Get Started</span>

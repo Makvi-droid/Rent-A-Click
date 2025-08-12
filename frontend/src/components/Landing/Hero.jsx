@@ -171,7 +171,24 @@ function Hero() {
           </p>
         </div>
 
-        
+        {/* Enhanced Buttons */}
+        <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
+          <button 
+            className="group relative bg-gradient-to-r from-purple-600 to-pink-600 text-white px-12 py-5 rounded-full text-lg font-bold overflow-hidden transition-all duration-500 transform hover:scale-110 hover:shadow-2xl hover:shadow-purple-500/30"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            {/* Button shine effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 translate-x-[-100%] group-hover:translate-x-[300%] transition-transform duration-1000" />
+            
+            <span className="relative flex items-center">
+              Rent Now
+              <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
+            </span>
+          </button>
+          
+          
+        </div>
 
         {/* Enhanced Scroll Indicator */}
         <div className="relative">
