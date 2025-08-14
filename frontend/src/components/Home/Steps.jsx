@@ -1,93 +1,198 @@
+import { Camera, ShoppingCart, CreditCard, Video, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+
 export default function Steps() {
+  const [isVisible, setIsVisible] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsVisible(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveStep((prev) => (prev + 1) % 4);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   const steps = [
     { 
       id: 1, 
       title: "Choose your camera",
       description: "Browse our extensive collection of professional cameras and equipment.",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5 text-gray-600 group-hover:text-white">
-          <path
-            d="M21 12C21 13.6569 16.9706 15 12 15C7.02944 15 3 13.6569 3 12M21 5C21 6.65685 16.9706 8 12 8C7.02944 8 3 6.65685 3 5M21 5C21 3.34315 16.9706 2 12 2C7.02944 2 3 3.34315 3 5M21 5V19C21 20.6569 16.9706 22 12 22C7.02944 22 3 20.6569 3 19V5"
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
-        </svg>
-      )
+      icon: Camera,
+      gradient: "from-purple-400 to-purple-600"
     },
     { 
       id: 2, 
       title: "Add to cart",
       description: "Select your preferred rental duration and add items to your cart.",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5 text-gray-600 group-hover:text-white">
-          <path
-            d="M2 3L2 21M22 3V21M11.8 20H12.2C13.8802 20 14.7202 20 15.362 19.673C15.9265 19.3854 16.3854 18.9265 16.673 18.362C17 17.7202 17 16.8802 17 15.2V8.8C17 7.11984 17 6.27976 16.673 5.63803C16.3854 5.07354 15.9265 4.6146 15.362 4.32698C14.7202 4 13.8802 4 12.2 4H11.8C10.1198 4 9.27976 4 8.63803 4.32698C8.07354 4.6146 7.6146 5.07354 7.32698 5.63803C7 6.27976 7 7.11984 7 8.8V15.2C7 16.8802 7 17.7202 7.32698 18.362C7.6146 18.9265 8.07354 19.3854 8.63803 19.673C9.27976 20 10.1198 20 11.8 20Z"
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
-        </svg>
-      )
+      icon: ShoppingCart,
+      gradient: "from-purple-500 to-pink-500"
     },
     { 
       id: 3, 
       title: "Checkout",
       description: "Complete your secure payment and confirm your rental dates.",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5 text-gray-600 group-hover:text-white">
-          <path
-            d="M22 12C22 17.5228 17.5228 22 12 22M22 12C22 6.47715 17.5228 2 12 2M22 12C22 9.79086 17.5228 8 12 8C6.47715 8 2 9.79086 2 12M22 12C22 14.2091 17.5228 16 12 16C6.47715 16 2 14.2091 2 12M12 22C6.47715 22 2 17.5228 2 12M12 22C14.2091 22 16 17.5228 16 12C16 6.47715 14.2091 2 12 2M12 22C9.79086 22 8 17.5228 8 12C8 6.47715 9.79086 2 12 2M2 12C2 6.47715 6.47715 2 12 2"
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
-        </svg>
-      )
+      icon: CreditCard,
+      gradient: "from-pink-500 to-pink-600"
     },
     { 
       id: 4, 
       title: "Start shooting",
       description: "Receive your equipment and start capturing amazing moments.",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5 text-gray-600 group-hover:text-white">
-          <path
-            d="M5.50049 10.5L2.00049 7.9999L3.07849 6.92193C3.964 6.03644 4.40676 5.5937 4.9307 5.31387C5.39454 5.06614 5.90267 4.91229 6.42603 4.86114C7.01719 4.80336 7.63117 4.92617 8.85913 5.17177L10.5 5.49997M18.4999 13.5L18.8284 15.1408C19.0742 16.3689 19.1971 16.983 19.1394 17.5743C19.0883 18.0977 18.9344 18.6059 18.6867 19.0699C18.4068 19.5939 17.964 20.0367 17.0783 20.9224L16.0007 22L13.5007 18.5M7 16.9998L8.99985 15M17.0024 8.99951C17.0024 10.1041 16.107 10.9995 15.0024 10.9995C13.8979 10.9995 13.0024 10.1041 13.0024 8.99951C13.0024 7.89494 13.8979 6.99951 15.0024 6.99951C16.107 6.99951 17.0024 7.89494 17.0024 8.99951ZM17.1991 2H16.6503C15.6718 2 15.1826 2 14.7223 2.11053C14.3141 2.20853 13.9239 2.37016 13.566 2.5895C13.1623 2.83689 12.8164 3.18282 12.1246 3.87469L6.99969 9C5.90927 10.0905 5.36406 10.6358 5.07261 11.2239C4.5181 12.343 4.51812 13.6569 5.07268 14.776C5.36415 15.3642 5.90938 15.9094 6.99984 16.9998V16.9998C8.09038 18.0904 8.63565 18.6357 9.22386 18.9271C10.343 19.4817 11.6569 19.4817 12.7761 18.9271C13.3643 18.6356 13.9095 18.0903 15 16.9997L20.1248 11.8745C20.8165 11.1827 21.1624 10.8368 21.4098 10.4331C21.6291 10.0753 21.7907 9.6851 21.8886 9.27697C21.9991 8.81664 21.9991 8.32749 21.9991 7.34918V6.8C21.9991 5.11984 21.9991 4.27976 21.6722 3.63803C21.3845 3.07354 20.9256 2.6146 20.3611 2.32698C19.7194 2 18.8793 2 17.1991 2Z"
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
-        </svg>
-      )
+      icon: Video,
+      gradient: "from-pink-400 to-purple-400"
     },
   ];
 
   return (
-    <section className="bg-gray-50 py-12 sm:py-16 lg:py-20 xl:py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <p className="text-sm font-bold uppercase tracking-widest text-gray-700">How It Works</p>
-          <h2 className="mt-6 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl lg:text-5xl">
-            Rent your camera in 4 easy steps
+    <section className="py-24 bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden">
+      {/* Animated background particles */}
+      <div className="absolute inset-0">
+        <div className="absolute top-20 left-10 w-2 h-2 bg-purple-400 rounded-full animate-pulse opacity-60"></div>
+        <div className="absolute top-40 right-20 w-1 h-1 bg-pink-400 rounded-full animate-ping opacity-40"></div>
+        <div className="absolute bottom-32 left-1/4 w-1.5 h-1.5 bg-purple-300 rounded-full animate-pulse opacity-50"></div>
+        <div className="absolute top-1/3 right-1/3 w-1 h-1 bg-pink-300 rounded-full animate-ping opacity-60"></div>
+        <div className="absolute bottom-20 right-10 w-2 h-2 bg-purple-400 rounded-full animate-pulse opacity-40"></div>
+      </div>
+
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-r from-purple-900/10 via-transparent to-pink-900/10"></div>
+      
+      <div className="mx-auto max-w-7xl px-6 lg:px-8 relative z-10">
+        {/* Header */}
+        <div className={`text-center transition-all duration-1000 transform ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full border border-purple-500/30 backdrop-blur-sm mb-6">
+            <Zap className="w-4 h-4 text-purple-400" />
+            <span className="text-purple-300 text-sm font-bold uppercase tracking-widest">How It Works</span>
+          </div>
+          
+          <h2 className="text-5xl md:text-6xl font-bold mb-6 relative">
+            <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent">
+              Rent in 4 Easy Steps
+            </span>
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 via-pink-400/20 to-purple-400/20 blur-3xl -z-10"></div>
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg font-normal text-gray-700 lg:text-xl lg:leading-8">
+          
+          <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed mb-16">
             Get professional camera equipment delivered to you with our simple rental process
+            <span className="block text-sm text-gray-500 mt-2 italic">
+              Fast, secure, and hassle-free
+            </span>
           </p>
         </div>
-        <ul className="mx-auto mt-12 grid max-w-md grid-cols-1 gap-10 sm:mt-16 lg:mt-20 lg:max-w-5xl lg:grid-cols-4">
-          {steps.map((step, index) => (
-            <li key={step.id} className="flex-start group relative flex lg:flex-col">
-              {/* Connecting line - hidden on last item */}
-              {index < steps.length - 1 && (
-                <span
-                  className="absolute left-[18px] top-14 h-[calc(100%_-_32px)] w-px bg-gray-300 lg:right-0 lg:left-auto lg:top-[18px] lg:h-px lg:w-[calc(100%_-_72px)]"
-                  aria-hidden="true"
-                ></span>
-              )}
-              <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-300 bg-gray-50 transition-all duration-200 group-hover:border-gray-900 group-hover:bg-gray-900">
-                {step.icon}
-              </div>
-              <div className="ml-6 lg:ml-0 lg:mt-10">
-                <h3 className="text-xl font-bold text-gray-900 before:mb-2 before:block before:font-mono before:text-sm before:text-gray-500">
-                  {step.title}
-                </h3>
-                <h4 className="mt-2 text-base text-gray-700">{step.description}</h4>
-              </div>
-            </li>
-          ))}
-        </ul>
+
+        {/* Steps */}
+        <div className="mx-auto max-w-6xl">
+          <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+            
+            {/* Connection lines for larger screens */}
+            <div className="hidden lg:block absolute top-16 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-purple-500/30 to-transparent"></div>
+            
+            {steps.map((step, index) => {
+              const IconComponent = step.icon;
+              const isActive = activeStep === index;
+              
+              return (
+                <li 
+                  key={step.id} 
+                  className={`relative group transition-all duration-700 transform ${
+                    isVisible ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'
+                  }`}
+                  style={{ transitionDelay: `${index * 200}ms` }}
+                >
+                  {/* Glowing effect for active step */}
+                  {isActive && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 to-pink-400/20 rounded-3xl blur-xl animate-pulse"></div>
+                  )}
+                  
+                  {/* Main content card */}
+                  <div className={`relative bg-gradient-to-br from-gray-800/60 via-gray-900/80 to-black/90 rounded-3xl p-8 border transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 backdrop-blur-lg ${
+                    isActive 
+                      ? 'border-purple-400/50 shadow-2xl shadow-purple-500/30' 
+                      : 'border-gray-700/50 hover:border-purple-400/30 shadow-xl shadow-black/50'
+                  }`}>
+                    
+                    {/* Step number badge */}
+                    <div className="absolute -top-4 -left-4">
+                      <div className={`w-8 h-8 rounded-full bg-gradient-to-r ${step.gradient} flex items-center justify-center text-white text-sm font-bold shadow-lg ${isActive ? 'animate-pulse scale-110' : ''}`}>
+                        {step.id}
+                      </div>
+                    </div>
+
+                    {/* Icon container */}
+                    <div className={`relative mb-6 group-hover:scale-110 transition-transform duration-300 ${isActive ? 'scale-110' : ''}`}>
+                      <div className={`inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-r ${step.gradient} transition-all duration-300 group-hover:shadow-lg shadow-purple-500/30`}>
+                        <IconComponent className="w-8 h-8 text-white" />
+                      </div>
+                      
+                      {/* Pulsing ring for active step */}
+                      {isActive && (
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-400/30 to-pink-400/30 animate-ping"></div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="space-y-4">
+                      <h3 className={`text-2xl font-bold transition-all duration-300 ${
+                        isActive 
+                          ? 'bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent' 
+                          : 'text-white group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:to-pink-400 group-hover:bg-clip-text group-hover:text-transparent'
+                      }`}>
+                        {step.title}
+                      </h3>
+                      
+                      <p className={`text-gray-400 leading-relaxed transition-colors duration-300 ${
+                        isActive ? 'text-gray-200' : 'group-hover:text-gray-200'
+                      }`}>
+                        {step.description}
+                      </p>
+                    </div>
+
+                    {/* Progress indicator */}
+                    <div className="mt-6">
+                      <div className="w-full bg-gray-700/50 rounded-full h-1 overflow-hidden">
+                        <div 
+                          className={`h-full bg-gradient-to-r ${step.gradient} transition-all duration-1000 ${
+                            isActive ? 'w-full' : 'w-0 group-hover:w-1/3'
+                          }`}
+                        ></div>
+                      </div>
+                    </div>
+
+                    {/* Corner accent */}
+                    <div className={`absolute top-0 right-0 w-16 h-16 bg-gradient-to-br ${step.gradient} opacity-5 group-hover:opacity-10 transition-opacity duration-300 rounded-br-3xl`}></div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Progress dots indicator */}
+          <div className="flex justify-center mt-12 space-x-3">
+            {steps.map((_, index) => (
+              <div
+                key={index}
+                className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  activeStep === index
+                    ? 'bg-gradient-to-r from-purple-400 to-pink-400 scale-125'
+                    : 'bg-gray-600 hover:bg-gray-500'
+                }`}
+              ></div>
+            ))}
+          </div>
+        </div>
+
+        {/* Call to action */}
+        <div className={`text-center mt-16 transition-all duration-1000 transform ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`} style={{ transitionDelay: '1000ms' }}>
+          <div className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full border border-purple-500/30 backdrop-blur-sm">
+            <Camera className="w-4 h-4 text-purple-400" />
+            <span className="text-gray-300 text-sm">Ready to start your creative journey?</span>
+          </div>
+        </div>
       </div>
     </section>
   );
