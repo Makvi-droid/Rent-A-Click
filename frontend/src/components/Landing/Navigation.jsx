@@ -147,6 +147,7 @@ function Navigation() {
             <button 
               className="md:hidden relative p-2 text-gray-300 hover:text-white transition-all duration-300 group"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              
             >
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg scale-0 group-hover:scale-100 transition-transform duration-300" />
               {isMobileMenuOpen ? (
@@ -189,6 +190,10 @@ function Navigation() {
             
             <button 
               className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-4 rounded-xl font-medium transform hover:scale-[1.02] transition-all duration-300 shadow-lg hover:shadow-purple-500/25 relative overflow-hidden group"
+              onClick={() => {
+                navigate("/auth");
+                setIsMobileMenuOpen(false); // Close menu after navigation
+              }}
               style={{ 
                 animationDelay: '0.3s',
                 animation: isMobileMenuOpen ? 'slideInLeft 0.5s ease-out forwards' : 'none'

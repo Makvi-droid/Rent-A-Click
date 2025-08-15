@@ -13,7 +13,7 @@ function Services(){
     const services = [
         {
             title: "DSLR & Mirrorless Cameras",
-            description: "Professional cameras for photography and videography",
+            description: "Affordable cameras for photography and videography",
             image: "📸",
             features: ["4K Video Recording", "Full Frame Sensors", "Professional Lenses"],
             color: "from-purple-400 to-pink-400",
@@ -22,7 +22,7 @@ function Services(){
         },
         {
             title: "Cinema & Broadcast Equipment", 
-            description: "Hollywood-grade equipment for film productions",
+            description: "Amazing equipment for photo productions",
             image: "🎬",
             features: ["8K Recording", "Professional Audio", "Stabilization Systems"],
             color: "from-blue-400 to-cyan-400",
@@ -31,7 +31,7 @@ function Services(){
         },
         {
             title: "Lighting & Accessories",
-            description: "Complete lighting solutions and professional accessories", 
+            description: "Complete lighting solutions and accessories", 
             image: "💡",
             features: ["LED Panels", "Softboxes", "Tripods & Gimbals"],
             color: "from-yellow-400 to-orange-400",
@@ -66,7 +66,7 @@ function Services(){
                     <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
                         Everything you need to create stunning content, all in one place.
                         <span className="block text-sm text-gray-500 mt-2 italic">
-                            Professional equipment rental for emerging creators
+                            Affordable equipment rental for emerging creators
                         </span>
                     </p>
                 </div>
@@ -143,7 +143,7 @@ function Services(){
                 <div className={`text-center mt-16 transition-all duration-1000 transform ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`} style={{ transitionDelay: '800ms' }}>
                     <div className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full border border-purple-500/30 backdrop-blur-sm">
                         <Zap className="w-4 h-4 text-yellow-400" />
-                        <span className="text-gray-300 text-sm">Perfect for content creators and small production teams</span>
+                        <span className="text-gray-300 text-sm">Perfect for creators and students</span>
                     </div>
                 </div>
             </div>
