@@ -1,4 +1,4 @@
-export default function AuthToggle({ isSignUp, toggleMode }) {
+function AuthToggle({ isSignUp, toggleMode }) {
   return (
     <div className="flex bg-slate-800/50 rounded-xl p-1 mb-8">
       <button
@@ -26,3 +26,5 @@ export default function AuthToggle({ isSignUp, toggleMode }) {
     </div>
   );
 }
+
+export default AuthToggle

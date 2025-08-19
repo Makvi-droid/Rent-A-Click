@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from "react-router-dom";
 import AuthToggle from '../components/Authentication/AuthToggle';
 import BackButton from '../components/Authentication/BackButton';
 import BackgroundElements from '../components/Authentication/BackgroundElements';
@@ -12,8 +11,9 @@ import NotificationBar from '../components/Authentication/NotificationBar';
 import UseAuthState from '../hooks/UseAuthState';
 import UseAuthValidation from '../hooks/UseAuthValidation';
 import UseAuthActions from '../hooks/UseAuthActions';
+
 function Auth() {
-  const navigate = (path) => console.log('Navigate to:', path);
+  
   const recaptchaRef = useRef();
 
   // Custom hooks for state management
@@ -33,6 +33,11 @@ function Auth() {
     setShowConfirmPassword,
     setFormData,
     setErrors,
+    setLoginAttempts,        // Added missing setter
+    setIsAccountLocked,      // Added missing setter
+    setLockoutTimeRemaining, // Added missing setter
+    setEmailVerificationSent, // Added missing setter
+    setIsLoading,            // Added missing setter
     toggleMode
   } = UseAuthState();
 
@@ -52,7 +57,11 @@ function Auth() {
     isSignUp,
     isLoading,
     loginAttempts,
-    emailVerificationSent
+    setLoginAttempts,        // Now properly passed
+    setIsAccountLocked,      // Now properly passed
+    setLockoutTimeRemaining, // Now properly passed
+    setEmailVerificationSent, // Now properly passed
+    setIsLoading             // Now properly passed
   });
 
   return (
@@ -69,7 +78,7 @@ function Auth() {
             <div className="p-8 lg:p-12 flex flex-col justify-center relative">
               <div className="w-full max-w-md mx-auto">
 
-                <BackButton navigate={navigate} />
+                <BackButton />
                 
                 <AuthToggle isSignUp={isSignUp} toggleMode={toggleMode} />
 
@@ -96,10 +105,11 @@ function Auth() {
                   showPassword={showPassword}
                   showConfirmPassword={showConfirmPassword}
                   loginAttempts={loginAttempts}
+                  recaptchaRef={recaptchaRef}  // Added recaptchaRef prop
                   onInputChange={handleInputChange}
                   onRecaptchaChange={handleRecaptchaChange}
-                  onTogglePassword={setShowPassword}
-                  onToggleConfirmPassword={setShowConfirmPassword}
+                  onTogglePassword={() => setShowPassword(prev => !prev)}
+                  onToggleConfirmPassword={() => setShowConfirmPassword(prev => !prev)}
                   onSubmit={handleSubmit}
                 />
 
