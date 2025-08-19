@@ -1,24 +1,16 @@
 import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
-const SubmitButton = ({ isLoading, isSignUp, onSubmit }) => {
+export default function SubmitButton({ isLoading, isSignUp, onSubmit, disabled }) {
   return (
     <button
-      type="button"
+      type="submit"
       onClick={onSubmit}
-      disabled={isLoading}
-      className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 px-6 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center space-x-2"
+      disabled={isLoading || disabled}
+      className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl px-6 py-4 font-medium hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all duration-200 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      {isLoading ? (
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-      ) : (
-        <>
-          <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
-          <ArrowRight className="w-5 h-5" />
-        </>
-      )}
+      {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
+      {isLoading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Sign In')}
     </button>
   );
-};
-
-export default SubmitButton
+}

@@ -1,17 +1,18 @@
 import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { useNavigate } from "react-router-dom";
 
-const BackButton = ({ navigate }) => {
+
+export default function BackButton() {
+
+  const navigate = useNavigate();
+
   return (
     <button
-      type="button"
-      onClick={() => navigate("/")}
-      className="flex items-center space-x-2 mb-4 text-white hover:text-purple-200 transition-colors"
+      onClick={() => navigate('/')}
+      className="absolute top-4 left-4 p-2 text-gray-400 hover:text-white transition-colors duration-200"
     >
-      <ArrowRight className="w-5 h-5 transform rotate-180" />
-      <span>Back</span>
+      <ArrowLeft className="w-6 h-6" />
     </button>
   );
-};
-
-export default BackButton
+}

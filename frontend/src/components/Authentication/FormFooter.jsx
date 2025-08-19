@@ -1,30 +1,17 @@
 import React from 'react';
 
-const FormFooter = ({ isSignUp }) => {
-  if (isSignUp) {
-    return (
-      <div className="text-center mt-6">
-        <p className="text-xs text-slate-400">
-          By creating an account, you agree to our{' '}
-          <button type="button" className="text-purple-400 hover:text-purple-300 transition-colors">
-            Terms of Service
-          </button>{' '}
-          and{' '}
-          <button type="button" className="text-purple-400 hover:text-purple-300 transition-colors">
-            Privacy Policy
-          </button>
-        </p>
-      </div>
-    );
-  }
-
+export default function FormFooter({ isSignUp }) {
   return (
-    <div className="text-center mt-6">
-      <button type="button" className="text-purple-400 hover:text-purple-300 text-sm transition-colors">
-        Forgot your password?
-      </button>
+    <div className="mt-6 text-center">
+      <p className="text-gray-400 text-sm">
+        {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+        <button
+          type="button"
+          className="text-purple-400 hover:text-purple-300 font-medium underline"
+        >
+          {isSignUp ? 'Sign In' : 'Sign Up'}
+        </button>
+      </p>
     </div>
   );
-};
-
-export default FormFooter
+}

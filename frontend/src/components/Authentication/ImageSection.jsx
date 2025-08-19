@@ -1,53 +1,59 @@
 import React from 'react';
-import { Shield, Camera, Zap } from 'lucide-react';
-import signUpPic from '../../assets/signUp.svg';
+import { Shield, Users, Zap, Star } from 'lucide-react';
 
-const ImageSection = () => {
+export default function ImageSection() {
   return (
-    <div className="relative bg-gradient-to-br from-purple-600 to-blue-600 p-8 flex flex-col justify-center items-center text-white overflow-hidden">
-      <div className="absolute inset-0 bg-black/20"></div>
-
-      <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center">
-        {/* Image Container */}
-        <div className="w-48 h-48 mb-8 rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20">
-          <div className="w-full h-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center backdrop-blur-sm">
-            <img 
-              src={signUpPic} 
-              alt="Camera Equipment" 
-              className="w-full h-full object-cover"
-            />
+    <div className="hidden lg:flex flex-col justify-center items-center p-12 bg-gradient-to-br from-purple-600/20 to-blue-600/20 relative overflow-hidden">
+      <div className="relative z-10 text-center">
+        <div className="mb-8">
+          <div className="w-32 h-32 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full mx-auto mb-6 flex items-center justify-center">
+            <Shield className="w-16 h-16 text-white" />
           </div>
+          <h2 className="text-3xl font-bold text-white mb-4">
+            Secure Authentication
+          </h2>
+          <p className="text-gray-300 text-lg mb-8">
+            Join thousands of users who trust our secure platform for their daily needs.
+          </p>
         </div>
 
-        <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-          RENT-N-CLICK
-        </h1>
-        <p className="text-xl text-purple-100 mb-8 max-w-md">
-          Professional camera equipment rental for creators and professionals
-        </p>
-
-        {/* Features */}
-        <div className="space-y-4 text-left">
-          <div className="flex items-center space-x-3">
-            <Shield className="w-5 h-5 text-green-300" />
-            <span className="text-purple-100">Secure & Trusted Platform</span>
+        {/* Feature highlights */}
+        <div className="grid grid-cols-1 gap-6">
+          <div className="flex items-center gap-4 text-left">
+            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-purple-400" />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">Community Driven</h3>
+              <p className="text-gray-400 text-sm">Connect with like-minded individuals</p>
+            </div>
           </div>
-          <div className="flex items-center space-x-3">
-            <Camera className="w-5 h-5 text-blue-300" />
-            <span className="text-purple-100">Premium Equipment</span>
+          
+          <div className="flex items-center gap-4 text-left">
+            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
+              <Zap className="w-6 h-6 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">Lightning Fast</h3>
+              <p className="text-gray-400 text-sm">Optimized for speed and performance</p>
+            </div>
           </div>
-          <div className="flex items-center space-x-3">
-            <Zap className="w-5 h-5 text-yellow-300" />
-            <span className="text-purple-100">Lightning Fast Delivery</span>
+          
+          <div className="flex items-center gap-4 text-left">
+            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
+              <Star className="w-6 h-6 text-yellow-400" />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">Premium Experience</h3>
+              <p className="text-gray-400 text-sm">Carefully crafted user experience</p>
+            </div>
           </div>
         </div>
       </div>
-
+      
       {/* Decorative elements */}
-      <div className="absolute top-10 right-10 w-20 h-20 border-2 border-white/20 rounded-full animate-spin-slow"></div>
-      <div className="absolute bottom-10 left-10 w-16 h-16 border-2 border-white/20 rounded-lg rotate-45 animate-pulse"></div>
+      <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-2 h-2 bg-blue-400 rounded-full animate-pulse animation-delay-1000"></div>
     </div>
   );
-};
-
-export default ImageSection
+}

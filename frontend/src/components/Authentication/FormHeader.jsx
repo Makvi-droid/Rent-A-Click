@@ -1,19 +1,17 @@
 import React from 'react';
 
-const FormHeader = ({ isSignUp }) => {
+export default function FormHeader({ isSignUp }) {
   return (
     <div className="text-center mb-8">
-      <h2 className="text-3xl font-bold text-white mb-2">
+      <h1 className="text-3xl font-bold text-white mb-2">
         {isSignUp ? 'Create Account' : 'Welcome Back'}
-      </h2>
-      <p className="text-slate-400">
+      </h1>
+      <p className="text-gray-400">
         {isSignUp 
-          ? 'Join our community of creators' 
-          : 'Sign in to your account'
+          ? 'Join us today and start your journey' 
+          : 'Sign in to access your account'
         }
       </p>
     </div>
   );
-};
-
-export default FormHeader
+}
