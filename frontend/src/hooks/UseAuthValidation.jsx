@@ -22,67 +22,89 @@ export default function useAuthValidation(formData, isSignUp, isAccountLocked, l
     return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    // Email validation
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!validateEmail(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
-    }
-    
-    // Password validation
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else {
-      const strength = checkPasswordStrength(formData.password);
-      if (!strength.minLength) {
-        newErrors.password = 'Password must be at least 8 characters long';
-      } else if (!(strength.hasUpper && strength.hasLower && strength.hasNumber && strength.hasSpecial)) {
-        newErrors.password = 'Password must contain uppercase, lowercase, number, and special character';
-      }
-    }
-    
-    // Sign up specific validations
-    if (isSignUp) {
-      // Full name validation
-      if (!formData.fullName) {
-        newErrors.fullName = 'Full name is required';
-      } else if (formData.fullName.length < 2) {
-        newErrors.fullName = 'Full name must be at least 2 characters';
+  // Memoized validation function that RETURNS the validation results
+  const validateForm = useMemo(() => {
+    return () => { // Return a function that performs validation
+      const newErrors = {};
+      
+      // Common validations for both login and signup
+      // Email validation
+      if (!formData.email || formData.email.trim() === '') {
+        newErrors.email = 'Email is required';
+      } else if (!validateEmail(formData.email.trim())) {
+        newErrors.email = 'Please enter a valid email address';
       }
       
-      // Phone number validation
-      if (formData.phoneNumber && !validatePhoneNumber(formData.phoneNumber)) {
-        newErrors.phoneNumber = 'Please enter a valid phone number';
+      // Password validation
+      if (!formData.password || formData.password.trim() === '') {
+        newErrors.password = 'Password is required';
+      } else if (isSignUp) {
+        // Strict password validation only for sign up
+        const strength = checkPasswordStrength(formData.password);
+        if (!strength.minLength) {
+          newErrors.password = 'Password must be at least 8 characters long';
+        } else if (!(strength.hasUpper && strength.hasLower && strength.hasNumber && strength.hasSpecial)) {
+          newErrors.password = 'Password must contain uppercase, lowercase, number, and special character';
+        }
+      } else {
+        // For login, just check minimum length (less strict)
+        if (formData.password.length < 6) {
+          newErrors.password = 'Password must be at least 6 characters';
+        }
       }
       
-      // Confirm password validation
-      if (!formData.confirmPassword) {
-        newErrors.confirmPassword = 'Please confirm your password';
-      } else if (formData.password !== formData.confirmPassword) {
-        newErrors.confirmPassword = 'Passwords do not match';
+      // Sign up specific validations
+      if (isSignUp) {
+        // Full name validation
+        if (!formData.fullName || formData.fullName.trim() === '') {
+          newErrors.fullName = 'Full name is required';
+        } else if (formData.fullName.trim().length < 2) {
+          newErrors.fullName = 'Full name must be at least 2 characters';
+        }
+        
+        // Phone number validation (optional for signup)
+        if (formData.phoneNumber && !validatePhoneNumber(formData.phoneNumber)) {
+          newErrors.phoneNumber = 'Please enter a valid phone number';
+        }
+        
+        // Confirm password validation
+        if (!formData.confirmPassword || formData.confirmPassword.trim() === '') {
+          newErrors.confirmPassword = 'Please confirm your password';
+        } else if (formData.password !== formData.confirmPassword) {
+          newErrors.confirmPassword = 'Passwords do not match';
+        }
+        
+        // Terms agreement validation
+        if (!formData.agreeToTerms) {
+          newErrors.agreeToTerms = 'You must agree to the Terms of Service and Privacy Policy';
+        }
+        
+        // reCAPTCHA validation (only for signup)
+        if (!formData.recaptchaToken) {
+          newErrors.recaptcha = 'Please complete the reCAPTCHA verification';
+        }
       }
       
-      // Terms agreement validation
-      if (!formData.agreeToTerms) {
-        newErrors.agreeToTerms = 'You must agree to the Terms of Service and Privacy Policy';
+      // Account lockout check (applies to both login and signup attempts)
+      if (isAccountLocked && lockoutTimeRemaining > 0) {
+        const minutesRemaining = Math.ceil(lockoutTimeRemaining / 60);
+        newErrors.submit = `Account temporarily locked. Please try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`;
       }
       
-      // Mock reCAPTCHA validation
-      if (!formData.recaptchaToken) {
-        newErrors.recaptcha = 'Please complete the reCAPTCHA verification';
-      }
-    }
-    
-    // Account lockout check
-    if (isAccountLocked) {
-      newErrors.submit = `Account temporarily locked. Please try again in ${Math.ceil(lockoutTimeRemaining / 60)} minutes.`;
-    }
-    
-    return newErrors;
-  };
+      return newErrors;
+    };
+  }, [
+    formData.email,
+    formData.password,
+    formData.fullName,
+    formData.phoneNumber,
+    formData.confirmPassword,
+    formData.agreeToTerms,
+    formData.recaptchaToken,
+    isSignUp,
+    isAccountLocked,
+    lockoutTimeRemaining
+  ]);
 
   return {
     validateForm,
