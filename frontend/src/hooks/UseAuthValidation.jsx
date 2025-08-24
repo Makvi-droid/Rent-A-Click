@@ -17,10 +17,35 @@ export default function useAuthValidation(formData, isSignUp, isAccountLocked, l
   };
 
   const validatePhoneNumber = (phone) => {
-    if (!phone) return true; // Optional field
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
-  };
+  if (!phone) return true; // Optional field
+  
+  // Remove all non-digit characters except + at the start
+  const cleanPhone = phone.replace(/[\s\-\(\)\.]/g, '');
+  
+  // More flexible regex that handles various international formats
+  const phoneRegex = /^[\+]?[\d]{7,15}$/;
+  
+  // Additional checks for common formats
+  const isValid = phoneRegex.test(cleanPhone);
+  
+
+  // This is a more permissive approach that accepts most reasonable formats
+  if (!isValid) {
+    // Check if it's a US format like (123) 456-7890 or 123-456-7890
+    const usFormatRegex = /^(\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}$/;
+    if (usFormatRegex.test(phone)) {
+      return true;
+    }
+    
+    // Check if it's an international format
+    const intlFormatRegex = /^[\+][1-9]{1}[0-9]{3,14}$/;
+    if (intlFormatRegex.test(cleanPhone)) {
+      return true;
+    }
+  }
+  
+  return isValid;
+};
 
   // Memoized validation function that RETURNS the validation results
   const validateForm = useMemo(() => {
