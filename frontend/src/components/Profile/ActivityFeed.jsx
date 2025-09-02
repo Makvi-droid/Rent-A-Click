@@ -1,11 +1,5 @@
 
-import { 
-  User, ArrowLeft, Settings, Shield, Bell, CreditCard, FileText, 
-  Download, Upload, Eye, Edit, Trash2, Camera, Clock, Star, 
-  Award, TrendingUp, MapPin, Calendar, Mail, Phone, Globe,
-  ChevronRight, Activity, Package, Heart, ShoppingBag, LogOut,
-  Key, Database, BarChart3, Users, Briefcase, HelpCircle
-} from 'lucide-react';
+import { Activity } from 'lucide-react';
 
 
 const ActivityFeed = ({ activities }) => (
