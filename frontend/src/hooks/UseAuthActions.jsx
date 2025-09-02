@@ -1,6 +1,6 @@
 // hooks/useAuthActions.js
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom"; // Added navigation import
+import { useNavigate } from "react-router-dom";
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -29,7 +29,7 @@ function UseAuthActions({
   setIsLoading
 }) {
   const { showSuccess, showError, showWarning, showInfo } = useToast();
-  const navigate = useNavigate(); // Added navigation hook
+  const navigate = useNavigate();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingEmailData, setPendingEmailData] = useState(null);
   
@@ -59,33 +59,28 @@ function UseAuthActions({
     }
   };
 
-  // Debounced email validation function - NO toast notifications during real-time validation
+  // Debounced email validation function
   const debouncedEmailCheck = useCallback(async (email) => {
-    // Don't check the same email twice
     if (email === lastCheckedEmailRef.current) return;
     
     lastCheckedEmailRef.current = email;
     
     const emailCheck = await checkEmailExists(email);
     
-    // Only show validation if the email is still the current one
     if (email === formData.email.toLowerCase().trim()) {
       if (emailCheck.exists) {
         if (emailCheck.isGoogleUser && !emailCheck.isEmailUser) {
-          // Only set form error - NO toast notification during typing
           setErrors(prev => ({ 
             ...prev, 
             email: "Email registered with Google. Use Google Sign-In." 
           }));
-        } else {
-          // Only set form error - NO toast notification during typing
+        } else if (isSignUp) {
           setErrors(prev => ({ 
             ...prev, 
             email: "Email already exists. Try logging in." 
           }));
         }
       } else {
-        // Clear email error if email is available
         setErrors(prev => {
           const newErrors = { ...prev };
           if (newErrors.email && (
@@ -98,7 +93,7 @@ function UseAuthActions({
         });
       }
     }
-  }, [formData.email, setErrors]);
+  }, [formData.email, setErrors, isSignUp]);
 
   // Input handling with improved debounced validation
   const handleInputChange = async (e) => {
@@ -112,8 +107,8 @@ function UseAuthActions({
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
-    // Debounced email validation for sign-up only
-    if (name === "email" && isSignUp) {
+    // Debounced email validation for both login and signup
+    if (name === "email") {
       const trimmedEmail = value.toLowerCase().trim();
       
       // Clear previous timeout
@@ -121,14 +116,11 @@ function UseAuthActions({
         clearTimeout(emailCheckTimeoutRef.current);
       }
 
-      // Use improved email completion check
       if (isEmailLikelyComplete(trimmedEmail)) {
-        // Set new timeout for validation (wait 2 seconds after user stops typing)
         emailCheckTimeoutRef.current = setTimeout(() => {
           debouncedEmailCheck(trimmedEmail);
         }, 2000);
       } else {
-        // Clear any existing email validation errors if email is incomplete
         setErrors(prev => {
           const newErrors = { ...prev };
           if (newErrors.email && (
@@ -151,7 +143,7 @@ function UseAuthActions({
     }
   };
 
-  // Enhanced Google SSO with better validation and navigation
+  // Enhanced Google SSO
   const handleGoogleSSO = async () => {
     if (isLoading) return;
     
@@ -194,10 +186,9 @@ function UseAuthActions({
         );
         console.log("New Google user profile created:", user.email);
         
-        // Navigate to dashboard after successful Google signup
         setTimeout(() => {
           navigate('/homePage');
-        }, 1500); // Small delay to show success message
+        }, 1500);
         
       } else {
         // Existing Google user
@@ -212,10 +203,9 @@ function UseAuthActions({
         );
         console.log("Existing Google user logged in:", user.email);
         
-        // Navigate to dashboard after successful Google login
         setTimeout(() => {
           navigate('/homePage');
-        }, 1500); // Small delay to show success message
+        }, 1500);
       }
 
     } catch (error) {
@@ -226,7 +216,7 @@ function UseAuthActions({
       switch (error.code) {
         case 'auth/popup-closed-by-user':
           showInfo("Sign-in was cancelled.", 3000);
-          return; // Don't show error for user cancellation
+          return;
         case 'auth/popup-blocked':
           errorMessage = "Pop-up was blocked. Please allow pop-ups and try again.";
           break;
@@ -250,7 +240,7 @@ function UseAuthActions({
     }
   };
 
-  // Account lockout with notifications
+  // Account lockout handling
   const handleAccountLockout = () => {
     setIsAccountLocked(true);
     setLockoutTimeRemaining(15 * 60);
@@ -278,13 +268,12 @@ function UseAuthActions({
   const handleExistingEmailConfirmation = () => {
     setShowConfirmModal(false);
     if (pendingEmailData) {
-      // Switch to login mode or show login suggestion
       showInfo("Please use the login form to access your existing account.", 5000);
       setPendingEmailData(null);
     }
   };
 
-  // Enhanced form submission with better validation and navigation
+  // *** FIXED: Enhanced form submission with Google account detection ***
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -313,7 +302,6 @@ function UseAuthActions({
         
         if (emailCheck.exists) {
           if (emailCheck.isGoogleUser && !emailCheck.isEmailUser) {
-            // NOW show toast notification since user is submitting
             showWarning(
               "This email is registered with Google. Please use 'Continue with Google' to sign in.",
               7000
@@ -331,7 +319,7 @@ function UseAuthActions({
           }
         }
 
-        // Proceed with registration
+        // Proceed with email/password registration
         const userCredential = await createUserWithEmailAndPassword(
           auth,
           formData.email.toLowerCase().trim(),
@@ -375,13 +363,30 @@ function UseAuthActions({
 
         console.log("Account created:", formData.email);
         
-        // Navigate to dashboard/welcome page after successful signup
         setTimeout(() => {
-          navigate('/homePage'); // You can change this to '/welcome' or any other route
-        }, 2000); // Delay to let user see the success message
+          navigate('/homePage');
+        }, 2000);
 
       } else {
-        // Login process
+        // *** FIXED: Login process with Google account detection ***
+        
+        // Check if this email is a Google-only account before attempting email/password login
+        const emailCheck = await checkEmailExists(formData.email.toLowerCase().trim());
+        
+        if (emailCheck.exists && emailCheck.isGoogleUser && !emailCheck.isEmailUser) {
+          // This is a Google-only account, prevent email/password login
+          showWarning(
+            "This email was registered with Google. Please use 'Continue with Google' to sign in.",
+            7000
+          );
+          setErrors({ 
+            submit: "This account uses Google Sign-In. Please use the 'Continue with Google' button above." 
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        // Proceed with email/password login (for email-registered accounts)
         const userCredential = await signInWithEmailAndPassword(
           auth, 
           formData.email.toLowerCase().trim(), 
@@ -400,10 +405,9 @@ function UseAuthActions({
         showSuccess("Welcome back! You've been logged in successfully.", 4000);
         console.log("User logged in:", formData.email);
         
-        // Navigate to dashboard immediately after successful login
         setTimeout(() => {
-          navigate('/homePage'); // You can change this to '/home' or any other route
-        }, 1000); // Small delay to show success message
+          navigate('/homePage');
+        }, 1000);
       }
 
       // Reset form on success
@@ -438,12 +442,12 @@ function UseAuthActions({
           showError(errorMessage, toastDuration);
           break;
         case 'auth/user-not-found':
-          errorMessage = "No account found with this email. Please sign up first.";
+          errorMessage = "No account found with this email. Please sign up first or use Google Sign-In if you registered with Google.";
           showError(errorMessage, 6000);
           break;
         case 'auth/wrong-password':
         case 'auth/invalid-credential':
-          errorMessage = "Incorrect email or password. Please try again.";
+          errorMessage = "Incorrect email or password. Please try again or use Google Sign-In if you registered with Google.";
           showError(errorMessage, toastDuration);
           break;
         case 'auth/user-disabled':
