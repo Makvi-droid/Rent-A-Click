@@ -120,7 +120,7 @@ function Navbar() {
             {/* Enhanced Desktop Menu */}
             <div className="hidden md:flex items-center space-x-8">
               {[
-                { name: 'Browse Cameras', href: '/cameras', icon: Camera },
+                { name: 'Browse Cameras', href: '/productsPage', icon: Camera },
                 { name: 'My Rentals', href: '/rentals', icon: Clock },
                 { name: 'Wishlist', href: '/wishlist', icon: Heart },
                 { name: 'Support', href: '/support', icon: Shield }
@@ -214,10 +214,10 @@ function Navbar() {
           </div>
         </div>
 
-        {/* Enhanced Mobile Menu */}
+        {/* Enhanced Mobile Menu - FIXED HEIGHT CONSTRAINTS */}
         <div className={`md:hidden transition-all duration-500 ease-out ${
           isMobileMenuOpen 
-            ? 'max-h-96 opacity-100 transform translate-y-0' 
+            ? 'max-h-screen opacity-100 transform translate-y-0' 
             : 'max-h-0 opacity-0 transform -translate-y-4'
         } overflow-hidden bg-black/95 backdrop-blur-xl border-t border-purple-500/30`}>
           {/* Menu background effects */}
@@ -247,7 +247,7 @@ function Navbar() {
             </div>
 
             {[
-              { name: 'Browse Cameras', href: '/cameras', icon: Camera },
+              { name: 'Browse Cameras', href: '/productsPage', icon: Camera },
               { name: 'My Rentals', href: '/rentals', icon: Clock },
               { name: 'Wishlist', href: '/wishlist', icon: Heart },
               { name: 'Support', href: '/support', icon: Shield }
