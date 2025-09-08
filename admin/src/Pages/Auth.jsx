@@ -1,19 +1,21 @@
 import { useRef, useEffect } from 'react';
-import AuthToggle from '../components/Authentication/AuthToggle';
-import BackButton from '../components/Authentication/BackButton';
-import BackgroundElements from '../components/Authentication/BackgroundElements';
-import FormFooter from '../components/Authentication/FormFooter';
-import FormHeader from '../components/Authentication/FormHeader';
-import ImageSection from '../components/Authentication/ImageSection';
-import AuthForm from '../components/Authentication/AuthForm';
-import GoogleSSO from '../components/Authentication/GoogleSSO';
-import NotificationBar from '../components/Authentication/NotificationBar';
+import AuthToggle from '../Components/Authentication/AuthToggle';
+import BackButton from '../Components/Authentication/BackButton';
+import BackgroundElements from '../Components/Authentication/BackgroundElements';
+import FormFooter from '../Components/Authentication/FormFooter';
+import FormHeader from '../Components/Authentication/FormHeader';
+import ImageSection from '../Components/Authentication/ImageSection';
+import AuthForm from '../Components/Authentication/AuthForm';
+import GoogleSSO from '../Components/Authentication/GoogleSSO';
+import NotificationBar from '../Components/Authentication/NotificationBar';
 import UseAuthState from '../hooks/UseAuthState';
 import UseAuthValidation from '../hooks/UseAuthValidation';
 import UseAuthActions from '../hooks/UseAuthActions';
 
+
 function Auth() {
   const recaptchaRef = useRef();
+  
 
   // Custom hooks for state management
   const {
