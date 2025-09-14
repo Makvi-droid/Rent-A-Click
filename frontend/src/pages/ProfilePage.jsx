@@ -145,7 +145,7 @@ const ProfilePage = () => {
 
   const handleQuickAction = (actionId) => {
     const routes = {
-      browse: '/cameras',
+      browse: '/productsPage',
       rentals: '/my-rentals',
       wishlist: '/wishlist',
       cart: '/cart'

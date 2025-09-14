@@ -37,6 +37,47 @@ function UseAuthActions({
   const emailCheckTimeoutRef = useRef(null);
   const lastCheckedEmailRef = useRef("");
 
+  // *** NEW: Function to check if user is admin and navigate accordingly ***
+  const checkAdminAndNavigate = async (user, welcomeMessage = null) => {
+    try {
+      // Check if user document exists in admin collection
+      const adminRef = doc(firestore, "admin", user.uid);
+      const adminSnap = await getDoc(adminRef);
+      
+      if (adminSnap.exists()) {
+        // User is admin - navigate to admin dashboard
+        console.log("Admin user detected:", user.email);
+        
+        if (welcomeMessage) {
+          showSuccess(welcomeMessage + " (Admin Access)", 4000);
+        }
+        
+        setTimeout(() => {
+          navigate('/adminDashboard');
+        }, 1500);
+      } else {
+        // Regular user - navigate to home page
+        console.log("Regular user:", user.email);
+        
+        if (welcomeMessage) {
+          showSuccess(welcomeMessage, 4000);
+        }
+        
+        setTimeout(() => {
+          navigate('/homePage');
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("Error checking admin status:", error);
+      // Fallback to regular user navigation if admin check fails
+      showWarning("Unable to verify admin status. Proceeding as regular user.", 4000);
+      
+      setTimeout(() => {
+        navigate('/homePage');
+      }, 1500);
+    }
+  };
+
   // Improved email completion check
   const isEmailLikelyComplete = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -143,7 +184,7 @@ function UseAuthActions({
     }
   };
 
-  // Enhanced Google SSO
+  // *** UPDATED: Enhanced Google SSO with admin navigation ***
   const handleGoogleSSO = async () => {
     if (isLoading) return;
     
@@ -179,16 +220,13 @@ function UseAuthActions({
         };
 
         await setDoc(userRef, userData);
-        
-        showSuccess(
-          `Welcome ${user.displayName || 'User'}! Your account has been created successfully.`,
-          6000
-        );
         console.log("New Google user profile created:", user.email);
         
-        setTimeout(() => {
-          navigate('/homePage');
-        }, 1500);
+        // Check admin status and navigate accordingly
+        await checkAdminAndNavigate(
+          user, 
+          `Welcome ${user.displayName || 'User'}! Your account has been created successfully.`
+        );
         
       } else {
         // Existing Google user
@@ -197,15 +235,13 @@ function UseAuthActions({
           updatedAt: serverTimestamp()
         }, { merge: true });
         
-        showSuccess(
-          `Welcome back ${user.displayName || 'User'}!`,
-          4000
-        );
         console.log("Existing Google user logged in:", user.email);
         
-        setTimeout(() => {
-          navigate('/homePage');
-        }, 1500);
+        // Check admin status and navigate accordingly
+        await checkAdminAndNavigate(
+          user, 
+          `Welcome back ${user.displayName || 'User'}!`
+        );
       }
 
     } catch (error) {
@@ -273,7 +309,7 @@ function UseAuthActions({
     }
   };
 
-  // *** FIXED: Enhanced form submission with Google account detection ***
+  // *** UPDATED: Enhanced form submission with admin navigation ***
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -349,26 +385,27 @@ function UseAuthActions({
         try {
           await sendEmailVerification(user);
           setEmailVerificationSent(true);
-          showSuccess(
-            `Account created successfully! Please check your email (${formData.email}) for verification link.`,
-            8000
+          
+          console.log("Account created:", formData.email);
+          
+          // Check admin status and navigate accordingly
+          await checkAdminAndNavigate(
+            user,
+            `Account created successfully! Please check your email (${formData.email}) for verification link.`
           );
+          
         } catch (verificationError) {
           console.warn("Email verification failed:", verificationError.message);
-          showWarning(
-            "Account created successfully, but email verification failed. You can request verification later.",
-            6000
+          
+          // Still check admin status even if verification fails
+          await checkAdminAndNavigate(
+            user,
+            "Account created successfully, but email verification failed. You can request verification later."
           );
         }
 
-        console.log("Account created:", formData.email);
-        
-        setTimeout(() => {
-          navigate('/homePage');
-        }, 2000);
-
       } else {
-        // *** FIXED: Login process with Google account detection ***
+        // *** UPDATED: Login process with admin navigation ***
         
         // Check if this email is a Google-only account before attempting email/password login
         const emailCheck = await checkEmailExists(formData.email.toLowerCase().trim());
@@ -402,12 +439,13 @@ function UseAuthActions({
         }, { merge: true });
 
         setLoginAttempts(0);
-        showSuccess("Welcome back! You've been logged in successfully.", 4000);
         console.log("User logged in:", formData.email);
         
-        setTimeout(() => {
-          navigate('/homePage');
-        }, 1000);
+        // Check admin status and navigate accordingly
+        await checkAdminAndNavigate(
+          user,
+          "Welcome back! You've been logged in successfully."
+        );
       }
 
       // Reset form on success

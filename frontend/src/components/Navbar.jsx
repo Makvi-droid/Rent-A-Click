@@ -122,7 +122,7 @@ function Navbar() {
               {[
                 { name: 'Browse Cameras', href: '/productsPage', icon: Camera },
                 { name: 'My Rentals', href: '/rentals', icon: Clock },
-                { name: 'Wishlist', href: '/wishlist', icon: Heart },
+                { name: 'Wishlist', href: '/wishlistPage', icon: Heart },
                 { name: 'Support', href: '/support', icon: Shield }
               ].map((item, index) => (
                 <button 
@@ -151,7 +151,7 @@ function Navbar() {
                 {/* Cart */}
                 <button 
                   className="relative p-2 text-gray-300 hover:text-white transition-all duration-300 group"
-                  onClick={() => handleNavigation('/cart')}
+                  onClick={() => handleNavigation('/cartPage')}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg scale-0 group-hover:scale-100 transition-transform duration-300" />
                   <ShoppingBag className="w-5 h-5 relative z-10" />
@@ -258,7 +258,7 @@ function Navbar() {
               <button 
                 className="flex-1 bg-gray-800 text-white px-4 py-3 rounded-lg font-medium transform hover:scale-[1.02] transition-all duration-300 flex items-center justify-center space-x-2"
                 onClick={() => {
-                  handleNavigation("/cart");
+                  handleNavigation("/cartPage");
                   setIsMobileMenuOpen(false);
                 }}
               >

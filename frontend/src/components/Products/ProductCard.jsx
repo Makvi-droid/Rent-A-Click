@@ -1,6 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
+import HeartIcon from './HeartIcon';
+import { useWishlist } from '../../hooks/useWishlist';
+import { useToast } from '../Authentication/Toast'; // Assuming you have this
 
 const ProductCard = ({ product }) => {
+  const { toggleWishlist, isInWishlist, isLoggedIn } = useWishlist();
+  const { showSuccess, showError, showInfo } = useToast();
+  const [isWishlistLoading, setIsWishlistLoading] = useState(false);
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'active': return 'bg-green-500';
@@ -18,9 +25,47 @@ const ProductCard = ({ product }) => {
     console.log('Rent product:', product.id);
   };
 
-  return (
-    <div className="group bg-white/10 backdrop-blur-md rounded-xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:-translate-y-2 border border-white/20 hover:border-white/40 overflow-hidden">
+  const handleWishlistToggle = async () => {
+    if (!isLoggedIn) {
+      showInfo('Please log in to add items to your wishlist', 4000);
+      return;
+    }
+
+    setIsWishlistLoading(true);
+    
+    try {
+      const success = await toggleWishlist(product.id);
       
+      if (success) {
+        if (isInWishlist(product.id)) {
+          showSuccess(`${product.name} removed from wishlist`, 3000);
+        } else {
+          showSuccess(`${product.name} added to wishlist`, 3000);
+        }
+      } else {
+        showError('Failed to update wishlist. Please try again.', 4000);
+      }
+    } catch (error) {
+      console.error('Wishlist toggle error:', error);
+      showError('Something went wrong. Please try again.', 4000);
+    } finally {
+      setIsWishlistLoading(false);
+    }
+  };
+
+  return (
+    <div className="group bg-white/10 backdrop-blur-md rounded-xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:-translate-y-2 border border-white/20 hover:border-white/40 overflow-hidden relative">
+      
+      {/* Wishlist Heart Icon - Positioned at top right */}
+      <div className="absolute top-3 right-3 z-10">
+        <HeartIcon
+          isInWishlist={isInWishlist(product.id)}
+          onToggle={handleWishlistToggle}
+          isLoading={isWishlistLoading}
+          size="w-5 h-5"
+        />
+      </div>
+
       {/* Product Image */}
       <div className="h-48 bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center">
         {product.imageUrl ? (
