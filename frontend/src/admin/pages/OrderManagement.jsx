@@ -1,4 +1,4 @@
-// OrderManagement.jsx - Enhanced with proper admin verification
+// OrderManagement.jsx - Enhanced with proper admin verification and FIXED DATE HANDLING
 import React, { useState, useEffect } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from '../../firebase';
@@ -64,6 +64,74 @@ const OrderManagement = () => {
     pendingRevenue: 0
   });
 
+  // ENHANCED DATE CONVERSION FUNCTION
+  const convertFirebaseTimestamp = (timestamp) => {
+    try {
+      // Handle different timestamp formats
+      if (!timestamp) {
+        console.warn('Timestamp is null or undefined');
+        return new Date();
+      }
+      
+      // If it's already a Date object
+      if (timestamp instanceof Date) {
+        return isNaN(timestamp.getTime()) ? new Date() : timestamp;
+      }
+      
+      // If it's a Firebase Timestamp object
+      if (timestamp && typeof timestamp.toDate === 'function') {
+        const date = timestamp.toDate();
+        return isNaN(date.getTime()) ? new Date() : date;
+      }
+      
+      // If it's a timestamp in milliseconds (number)
+      if (typeof timestamp === 'number') {
+        const date = new Date(timestamp);
+        return isNaN(date.getTime()) ? new Date() : date;
+      }
+      
+      // If it's a string, try to parse it
+      if (typeof timestamp === 'string') {
+        const date = new Date(timestamp);
+        return isNaN(date.getTime()) ? new Date() : date;
+      }
+      
+      // If it has seconds property (Firestore timestamp format)
+      if (timestamp && timestamp.seconds) {
+        const date = new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000);
+        return isNaN(date.getTime()) ? new Date() : date;
+      }
+      
+      console.warn('Unknown timestamp format:', timestamp);
+      return new Date();
+    } catch (error) {
+      console.error('Error converting timestamp:', error, 'Original timestamp:', timestamp);
+      return new Date();
+    }
+  };
+
+  // ENHANCED DATE FORMATTING FUNCTION
+  const formatDate = (date, options = {}) => {
+    try {
+      const validDate = convertFirebaseTimestamp(date);
+      
+      const defaultOptions = {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Manila'
+      };
+      
+      return new Intl.DateTimeFormat('en-PH', { ...defaultOptions, ...options }).format(validDate);
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
+  };
+
   // Check if user is admin
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -98,14 +166,22 @@ const OrderManagement = () => {
 
   // Currency formatter
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-PH', {
-      style: 'currency',
-      currency: 'PHP',
-      minimumFractionDigits: 2
-    }).format(amount);
+    try {
+      const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      if (isNaN(numAmount)) return '₱0.00';
+      
+      return new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+        minimumFractionDigits: 2
+      }).format(numAmount);
+    } catch (error) {
+      console.error('Error formatting currency:', error);
+      return '₱0.00';
+    }
   };
 
-  // Fetch orders from Firebase (only if user is admin)
+  // Fetch orders from Firebase (only if user is admin) - ENHANCED WITH BETTER DATE HANDLING
   useEffect(() => {
     if (!user || !isAdmin || adminCheckLoading) return;
 
@@ -115,13 +191,38 @@ const OrderManagement = () => {
     const unsubscribe = onSnapshot(ordersQuery, 
       (snapshot) => {
         try {
-          const ordersData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate() || new Date()
-          }));
+          const ordersData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            
+            return {
+              id: doc.id,
+              ...data,
+              // ENHANCED DATE CONVERSION
+              createdAt: convertFirebaseTimestamp(data.createdAt),
+              updatedAt: convertFirebaseTimestamp(data.updatedAt),
+              // Add formatted dates for easy display
+              formattedCreatedAt: formatDate(data.createdAt),
+              formattedUpdatedAt: formatDate(data.updatedAt),
+              // Handle rental dates if they exist
+              rentalDetails: data.rentalDetails ? {
+                ...data.rentalDetails,
+                rentalDate: convertFirebaseTimestamp(data.rentalDetails?.rentalDate),
+                returnDate: convertFirebaseTimestamp(data.rentalDetails?.returnDate),
+                formattedRentalDate: formatDate(data.rentalDetails?.rentalDate, { 
+                  year: 'numeric', 
+                  month: 'short', 
+                  day: 'numeric' 
+                }),
+                formattedReturnDate: formatDate(data.rentalDetails?.returnDate, { 
+                  year: 'numeric', 
+                  month: 'short', 
+                  day: 'numeric' 
+                })
+              } : null
+            };
+          });
           
+          console.log('Orders loaded with enhanced date handling:', ordersData.length);
           setOrders(ordersData);
           calculateStats(ordersData);
           setLoading(false);
@@ -151,15 +252,30 @@ const OrderManagement = () => {
       cancelled: ordersData.filter(order => order.status === 'cancelled').length,
       totalRevenue: ordersData
         .filter(order => order.paymentStatus === 'paid')
-        .reduce((sum, order) => sum + (order.pricing?.total || 0), 0),
+        .reduce((sum, order) => sum + (parseFloat(order.pricing?.total) || 0), 0),
       pendingRevenue: ordersData
         .filter(order => order.paymentStatus === 'pending')
-        .reduce((sum, order) => sum + (order.pricing?.total || 0), 0)
+        .reduce((sum, order) => sum + (parseFloat(order.pricing?.total) || 0), 0)
     };
     setStats(stats);
   };
 
-  // Apply filters
+  // ENHANCED DATE FILTERING
+  const isDateInRange = (orderDate, startDate, endDate) => {
+    try {
+      const date = convertFirebaseTimestamp(orderDate);
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      
+      return date >= start && date <= end;
+    } catch (error) {
+      console.error('Error in date range comparison:', error);
+      return false;
+    }
+  };
+
+  // Apply filters - ENHANCED WITH BETTER DATE HANDLING
   useEffect(() => {
     let filtered = [...orders];
 
@@ -183,7 +299,7 @@ const OrderManagement = () => {
       filtered = filtered.filter(order => order.rentalDetails?.deliveryMethod === filters.deliveryMethod);
     }
 
-    // Date range filter
+    // ENHANCED DATE RANGE FILTER
     if (filters.dateRange !== 'all') {
       const now = new Date();
       let startDate;
@@ -191,30 +307,34 @@ const OrderManagement = () => {
       switch (filters.dateRange) {
         case 'today':
           startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          filtered = filtered.filter(order => {
+            const orderDate = convertFirebaseTimestamp(order.createdAt);
+            return orderDate >= startDate;
+          });
           break;
         case 'week':
           startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          filtered = filtered.filter(order => {
+            const orderDate = convertFirebaseTimestamp(order.createdAt);
+            return orderDate >= startDate;
+          });
           break;
         case 'month':
           startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          filtered = filtered.filter(order => {
+            const orderDate = convertFirebaseTimestamp(order.createdAt);
+            return orderDate >= startDate;
+          });
           break;
         case 'custom':
           if (filters.customDateStart && filters.customDateEnd) {
-            const start = new Date(filters.customDateStart);
-            const end = new Date(filters.customDateEnd);
-            end.setHours(23, 59, 59, 999);
-            filtered = filtered.filter(order => {
-              const orderDate = new Date(order.createdAt);
-              return orderDate >= start && orderDate <= end;
-            });
+            filtered = filtered.filter(order => 
+              isDateInRange(order.createdAt, filters.customDateStart, filters.customDateEnd)
+            );
           }
           break;
         default:
           break;
-      }
-
-      if (startDate && filters.dateRange !== 'custom') {
-        filtered = filtered.filter(order => new Date(order.createdAt) >= startDate);
       }
     }
 
@@ -232,7 +352,7 @@ const OrderManagement = () => {
     }
 
     setFilteredOrders(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   }, [orders, filters]);
 
   // Update order status
@@ -424,6 +544,7 @@ const OrderManagement = () => {
           onUpdatePaymentStatus={updatePaymentStatus}
           onDeleteOrder={deleteOrder}
           formatCurrency={formatCurrency}
+          formatDate={formatDate} // Pass the formatDate function
         />
 
         {/* Order Details Modal */}
@@ -438,6 +559,7 @@ const OrderManagement = () => {
             onUpdateStatus={updateOrderStatus}
             onUpdatePaymentStatus={updatePaymentStatus}
             formatCurrency={formatCurrency}
+            formatDate={formatDate} // Pass the formatDate function
           />
         )}
       </div>

@@ -1,4 +1,4 @@
-// OrdersTable.jsx
+// OrdersTable.jsx - FIXED DATE HANDLING
 import React, { useState } from 'react';
 import { 
   Eye, 
@@ -24,7 +24,8 @@ const OrdersTable = ({
   onUpdateStatus,
   onUpdatePaymentStatus,
   onDeleteOrder,
-  formatCurrency
+  formatCurrency,
+  formatDate // NOW USING THE ENHANCED formatDate FROM PARENT
 }) => {
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [actionMenuOpen, setActionMenuOpen] = useState(null);
@@ -73,15 +74,86 @@ const OrdersTable = ({
     );
   };
 
-  const formatDate = (date) => {
+  // ENHANCED DATE FORMATTING - Use parent's formatDate or create fallback
+  const safeFormatDate = (date, options = {}) => {
+    // If formatDate prop is provided, use it (enhanced version from parent)
+    if (formatDate && typeof formatDate === 'function') {
+      return formatDate(date, options);
+    }
+    
+    // Fallback formatting if parent doesn't provide formatDate
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    
+    try {
+      let validDate;
+      
+      // Handle different date formats
+      if (date instanceof Date) {
+        validDate = date;
+      } else if (typeof date === 'object' && date !== null) {
+        // Handle Firestore Timestamp
+        if (date.seconds !== undefined) {
+          validDate = new Date(date.seconds * 1000 + (date.nanoseconds || 0) / 1000000);
+        } else if (typeof date.toDate === 'function') {
+          validDate = date.toDate();
+        } else {
+          console.warn('Unknown date object:', date);
+          return 'Invalid Date';
+        }
+      } else {
+        validDate = new Date(date);
+      }
+      
+      // Check if date is valid
+      if (!validDate || isNaN(validDate.getTime())) {
+        console.warn('Invalid date:', date);
+        return 'Invalid Date';
+      }
+      
+      const defaultOptions = {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Manila'
+      };
+      
+      return new Intl.DateTimeFormat('en-US', { ...defaultOptions, ...options }).format(validDate);
+    } catch (error) {
+      console.error('Error formatting date:', error, date);
+      return 'Date Error';
+    }
+  };
+
+  // ENHANCED RENTAL DATE FORMATTING
+  const formatRentalDate = (date) => {
+    if (!date) return 'N/A';
+    
+    // Use the enhanced formatDate if available
+    if (formatDate && typeof formatDate === 'function') {
+      return formatDate(date, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    
+    // Fallback
+    try {
+      const validDate = new Date(date);
+      if (isNaN(validDate.getTime())) {
+        // If it's already a formatted string, return as is
+        if (typeof date === 'string' && (date.includes('/') || date.includes('-'))) {
+          return date;
+        }
+        return 'Invalid Date';
+      }
+      return validDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting rental date:', error);
+      return 'Date Error';
+    }
   };
 
   const ActionMenu = ({ order, isOpen, onClose }) => {
@@ -270,7 +342,7 @@ const OrdersTable = ({
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="flex items-center gap-2 text-gray-400">
                 <Calendar className="w-4 h-4" />
-                <span>{formatDate(order.createdAt)}</span>
+                <span>{safeFormatDate(order.createdAt)}</span>
               </div>
               <div className="flex items-center gap-2 text-gray-400">
                 <CreditCard className="w-4 h-4" />
@@ -362,11 +434,11 @@ const OrdersTable = ({
                     <td className="py-4 px-4">
                       <div className="flex flex-col">
                         <span className="text-white text-sm">
-                          {formatDate(order.createdAt)}
+                          {safeFormatDate(order.createdAt)}
                         </span>
                         {order.rentalDetails?.startDate && (
                           <span className="text-xs text-gray-400">
-                            Rental: {new Date(order.rentalDetails.startDate).toLocaleDateString()}
+                            Rental: {formatRentalDate(order.rentalDetails.startDate)}
                           </span>
                         )}
                       </div>
@@ -378,7 +450,7 @@ const OrdersTable = ({
                           {order.items?.length || 0} items
                         </span>
                         <span className="text-xs text-gray-400">
-                          {order.pricing?.rentalDays || 0} days
+                          {order.pricing?.rentalDays || order.rentalDetails?.duration || 0} days
                         </span>
                       </div>
                     </td>

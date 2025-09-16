@@ -12,6 +12,8 @@ import {
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, firestore } from "../firebase";
 import { useToast } from "../components/Authentication/Toast";
+// Import the sequential ID generator
+import { getNextAvailableUserId } from "../utils/generateSequentialUserId";
 
 function UseAuthActions({
   formData,
@@ -184,7 +186,7 @@ function UseAuthActions({
     }
   };
 
-  // *** UPDATED: Enhanced Google SSO with admin navigation ***
+  // *** UPDATED: Enhanced Google SSO with sequential ID generation ***
   const handleGoogleSSO = async () => {
     if (isLoading) return;
     
@@ -205,8 +207,14 @@ function UseAuthActions({
       const docSnap = await getDoc(userRef);
 
       if (!docSnap.exists()) {
+        // *** NEW: Generate sequential ID for new Google user ***
+        console.log("Generating sequential ID for new Google user...");
+        const customId = await getNextAvailableUserId();
+        console.log("Generated custom ID:", customId);
+        
         // New Google user
         const userData = {
+          customId: customId, // *** NEW: Add sequential ID ***
           fullName: user.displayName || "",
           email: user.email,
           phoneNumber: user.phoneNumber || "",
@@ -220,12 +228,12 @@ function UseAuthActions({
         };
 
         await setDoc(userRef, userData);
-        console.log("New Google user profile created:", user.email);
+        console.log("New Google user profile created:", user.email, "with ID:", customId);
         
         // Check admin status and navigate accordingly
         await checkAdminAndNavigate(
           user, 
-          `Welcome ${user.displayName || 'User'}! Your account has been created successfully.`
+          `Welcome ${user.displayName || 'User'}! Your account ID is ${customId}.`
         );
         
       } else {
@@ -237,11 +245,14 @@ function UseAuthActions({
         
         console.log("Existing Google user logged in:", user.email);
         
+        // Get the custom ID for display
+        const userData = docSnap.data();
+        const displayMessage = userData.customId 
+          ? `Welcome back ${user.displayName || 'User'}! (ID: ${userData.customId})`
+          : `Welcome back ${user.displayName || 'User'}!`;
+        
         // Check admin status and navigate accordingly
-        await checkAdminAndNavigate(
-          user, 
-          `Welcome back ${user.displayName || 'User'}!`
-        );
+        await checkAdminAndNavigate(user, displayMessage);
       }
 
     } catch (error) {
@@ -309,7 +320,7 @@ function UseAuthActions({
     }
   };
 
-  // *** UPDATED: Enhanced form submission with admin navigation ***
+  // *** UPDATED: Enhanced form submission with sequential ID generation ***
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -355,6 +366,11 @@ function UseAuthActions({
           }
         }
 
+        // *** NEW: Generate sequential ID before creating user ***
+        console.log("Generating sequential ID for new email user...");
+        const customId = await getNextAvailableUserId();
+        console.log("Generated custom ID:", customId);
+
         // Proceed with email/password registration
         const userCredential = await createUserWithEmailAndPassword(
           auth,
@@ -363,8 +379,9 @@ function UseAuthActions({
         );
         const user = userCredential.user;
 
-        // Create user document
+        // *** UPDATED: Create user document with sequential ID ***
         const userData = {
+          customId: customId, // *** NEW: Add sequential ID ***
           fullName: formData.fullName?.trim() || "",
           email: formData.email?.toLowerCase()?.trim() || "",
           phoneNumber: formData.phoneNumber?.trim() || "",
@@ -386,12 +403,12 @@ function UseAuthActions({
           await sendEmailVerification(user);
           setEmailVerificationSent(true);
           
-          console.log("Account created:", formData.email);
+          console.log("Account created:", formData.email, "with ID:", customId);
           
           // Check admin status and navigate accordingly
           await checkAdminAndNavigate(
             user,
-            `Account created successfully! Please check your email (${formData.email}) for verification link.`
+            `Account created successfully! Your ID is ${customId}. Please check your email (${formData.email}) for verification.`
           );
           
         } catch (verificationError) {
@@ -400,7 +417,7 @@ function UseAuthActions({
           // Still check admin status even if verification fails
           await checkAdminAndNavigate(
             user,
-            "Account created successfully, but email verification failed. You can request verification later."
+            `Account created successfully! Your ID is ${customId}. Email verification failed but you can request it later.`
           );
         }
 
@@ -438,14 +455,20 @@ function UseAuthActions({
           updatedAt: serverTimestamp()
         }, { merge: true });
 
+        // Get user data to display custom ID
+        const userDoc = await getDoc(userRef);
+        const userData = userDoc.exists() ? userDoc.data() : null;
+
         setLoginAttempts(0);
         console.log("User logged in:", formData.email);
         
+        // Display welcome message with custom ID if available
+        const displayMessage = userData?.customId 
+          ? `Welcome back!`
+          : "Welcome back! You've been logged in successfully.";
+        
         // Check admin status and navigate accordingly
-        await checkAdminAndNavigate(
-          user,
-          "Welcome back! You've been logged in successfully."
-        );
+        await checkAdminAndNavigate(user, displayMessage);
       }
 
       // Reset form on success
@@ -465,6 +488,15 @@ function UseAuthActions({
 
       let errorMessage = "An error occurred. Please try again.";
       let toastDuration = 5000;
+
+      // *** NEW: Handle sequential ID generation errors ***
+      if (error.message && error.message.includes("Failed to generate unique user ID")) {
+        errorMessage = "Unable to generate user ID. Please try again in a moment.";
+        showError(errorMessage, 6000);
+        setErrors({ submit: errorMessage });
+        setIsLoading(false);
+        return;
+      }
 
       switch (error.code) {
         case 'auth/email-already-in-use':

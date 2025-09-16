@@ -123,58 +123,60 @@ const ProductManagement = () => {
     setFilteredProducts(filtered);
   };
 
-  const handleAddProduct = async (productData) => {
-    try {
-      setError('');
-      
-      // Validate required fields
-      if (!productData.inventoryId) {
-        throw new Error('Please select an inventory item');
-      }
-      
-      const inventoryItem = inventoryProducts.find(item => item.id === productData.inventoryId);
-      if (!inventoryItem) {
-        throw new Error('Selected inventory item not found');
-      }
+  // In your ProductManagement.js file, update the handleAddProduct function:
 
-      const productId = await generateProductId();
-      
-      // Create new product with data from inventory
-      const newProduct = {
-        id: productId,
-        inventoryId: inventoryItem.id,
-        name: productData.name || `Product ${productId}`,
-        brand: productData.brand || 'No Brand',
-        category: inventoryItem.category,
-        subCategory: productData.subCategory || '',
-        description: productData.description || '',
-        price: parseFloat(productData.price) || 0,
-        status: productData.status || 'active',
-        approved: productData.approved || false,
-        image: productData.image || inventoryItem.image || '📦',
-        stock: inventoryItem.stock, // Read-only from inventory
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-
-      console.log('Adding product to Firestore:', newProduct);
-      
-      // Use setDoc with custom document ID
-      const docRef = doc(collection(firestore, 'products'), productId);
-      await setDoc(docRef, newProduct);
-      console.log('Product added successfully with custom ID:', productId);
-      
-      // Refresh data
-      await fetchData();
-      
-      return { success: true, id: productId };
-    } catch (err) {
-      console.error('Error adding product:', err);
-      const errorMessage = err.message || 'Failed to add product';
-      setError(errorMessage);
-      throw new Error(errorMessage);
+const handleAddProduct = async (productData) => {
+  try {
+    setError('');
+    
+    // Validate required fields
+    if (!productData.inventoryId) {
+      throw new Error('Please select an inventory item');
     }
-  };
+    
+    const inventoryItem = inventoryProducts.find(item => item.id === productData.inventoryId);
+    if (!inventoryItem) {
+      throw new Error('Selected inventory item not found');
+    }
+
+    const productId = await generateProductId();
+    
+    // Create new product with data from inventory
+    const newProduct = {
+      id: productId,
+      inventoryId: inventoryItem.id,
+      name: productData.name || `Product ${productId}`,
+      brand: productData.brand || 'No Brand',
+      category: inventoryItem.category,
+      subCategory: productData.subCategory || '',
+      description: productData.description || '',
+      price: parseFloat(productData.price) || 0,
+      status: productData.status || 'active',
+      approved: productData.approved || false,
+      imageUrl: productData.imageUrl || inventoryItem.image || '', // ← Changed from 'image' to 'imageUrl'
+      stock: inventoryItem.stock, // Read-only from inventory
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    console.log('Adding product to Firestore:', newProduct);
+    
+    // Use setDoc with custom document ID
+    const docRef = doc(collection(firestore, 'products'), productId);
+    await setDoc(docRef, newProduct);
+    console.log('Product added successfully with custom ID:', productId);
+    
+    // Refresh data
+    await fetchData();
+    
+    return { success: true, id: productId };
+  } catch (err) {
+    console.error('Error adding product:', err);
+    const errorMessage = err.message || 'Failed to add product';
+    setError(errorMessage);
+    throw new Error(errorMessage);
+  }
+};
 
   const handleUpdateProduct = async (firestoreId, updates) => {
     try {

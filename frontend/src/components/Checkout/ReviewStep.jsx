@@ -129,19 +129,7 @@ const ReviewStep = ({ formData, errors, rentalDays, onInputChange }) => {
 
         {/* Terms and Conditions */}
         <div className="space-y-4">
-          <label className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              name="newsletter"
-              checked={formData.newsletter}
-              onChange={onInputChange}
-              className="text-purple-600 focus:ring-purple-500 rounded"
-            />
-            <span className="text-white text-sm">
-              Subscribe to our newsletter for equipment updates and
-              exclusive offers
-            </span>
-          </label>
+          
 
           <label className="flex items-start space-x-3">
             <input

@@ -289,7 +289,7 @@ const AddToCart = () => {
                         <div className="flex justify-between text-gray-300 pt-2 border-t border-white/20">
                           <span>Total Amount:</span>
                           <span className="text-white font-semibold text-lg">
-                            ${selectedTotalAmount.toFixed(2)}
+                            ₱{selectedTotalAmount.toFixed(2)}
                           </span>
                         </div>
                       )}

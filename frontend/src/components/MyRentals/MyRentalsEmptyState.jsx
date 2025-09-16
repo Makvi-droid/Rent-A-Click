@@ -13,7 +13,7 @@ const MyRentalsEmptyState = () => {
   }, []);
 
   const handleBrowseItems = () => {
-    navigate('/');
+    navigate('/productsPage');
   };
 
   const handleExploreCategories = () => {
@@ -94,15 +94,7 @@ const MyRentalsEmptyState = () => {
             </div>
           </button>
 
-          <button
-            onClick={handleExploreCategories}
-            className="group relative px-8 py-4 bg-gray-800/50 hover:bg-gray-700/50 text-white font-semibold rounded-xl border border-gray-600/50 hover:border-gray-500/50 transition-all duration-300 transform hover:scale-105"
-          >
-            <div className="flex items-center justify-center space-x-2">
-              <Package className="w-5 h-5" />
-              <span>Explore Categories</span>
-            </div>
-          </button>
+          
         </div>
 
         {/* Tips Section */}

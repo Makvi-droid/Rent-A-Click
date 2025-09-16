@@ -30,6 +30,7 @@ import CheckoutLoadingState from "../components/Checkout/CheckoutLoadingState";
 import CheckoutHeader from "../components/Checkout/CheckoutHeader";
 import CheckoutFormSection from "../components/Checkout/CheckoutFormSection";
 import CheckoutTrustIndicators from "../components/Checkout/CheckoutTrustIndicators";
+import Navbar from "../components/Navbar";
 
 
 const Checkout = ({ 
@@ -608,6 +609,7 @@ Our team will contact you within 24 hours to confirm your rental.`;
   return (
     <PayPalScriptProvider options={paypalInitialOptions}>
       <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden">
+        <Navbar/>
         <CheckoutBackground />
 
         <div className="max-w-7xl mx-auto px-6 py-12 relative z-10">

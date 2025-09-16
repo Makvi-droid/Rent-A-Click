@@ -57,46 +57,49 @@ const toggleApproval = async () => {
   return (
     <div className="group bg-white/10 backdrop-blur-md rounded-xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:-translate-y-2 border border-white/20 hover:border-white/40 overflow-hidden">
       
-      {/* Product Image */}
-      <div className="h-48 bg-gradient-to-br from-white/10 to-white/5 overflow-hidden relative">
-        {product.imageUrl || product.image ? (
-          <img 
-            src={product.imageUrl || product.image} 
-            alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextElementSibling.style.display = 'flex';
-            }}
-          />
-        ) : null}
-        
-        {/* Fallback placeholder */}
-        <div className="flex items-center justify-center h-full" style={{ display: (product.imageUrl || product.image) ? 'none' : 'flex' }}>
-          <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-            <svg className="w-10 h-10 text-white group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2-2V9z" />
-            </svg>
-          </div>
-        </div>
+      
 
-        {/* Approval Badge */}
-        <div className="absolute top-2 right-2">
-          <span className={`${product.approved ? 'bg-green-500' : 'bg-yellow-500'} text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg`}>
-            {product.approved ? '✓ Live' : '⏳ Hidden'}
-          </span>
-        </div>
+{/* Product Image */}
+<div className="h-48 bg-gradient-to-br from-white/10 to-white/5 overflow-hidden relative">
+  {product.imageUrl ? (
+    <img 
+      src={product.imageUrl} 
+      alt={product.name}
+      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+      onError={(e) => {
+        e.target.style.display = 'none';
+        e.target.nextElementSibling.style.display = 'flex';
+      }}
+    />
+  ) : null}
+  
+  {/* Fallback placeholder */}
+  <div className="flex items-center justify-center h-full" style={{ display: product.imageUrl ? 'none' : 'flex' }}>
+    <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+      <svg className="w-10 h-10 text-white group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2-2V9z" />
+      </svg>
+    </div>
+  </div>
 
-        {/* Stock Alert Badge */}
-        {showStock && product.stock === 0 && (
-          <div className="absolute top-2 left-2">
-            <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center space-x-1">
-              <AlertCircle className="w-3 h-3" />
-              <span>No Stock</span>
-            </span>
-          </div>
-        )}
-      </div>
+  {/* Rest of your badges remain the same */}
+  {/* Approval Badge */}
+  <div className="absolute top-2 right-2">
+    <span className={`${product.approved ? 'bg-green-500' : 'bg-yellow-500'} text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg`}>
+      {product.approved ? '✓ Live' : '⏳ Hidden'}
+    </span>
+  </div>
+
+  {/* Stock Alert Badge */}
+  {showStock && product.stock === 0 && (
+    <div className="absolute top-2 left-2">
+      <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center space-x-1">
+        <AlertCircle className="w-3 h-3" />
+        <span>No Stock</span>
+      </span>
+    </div>
+  )}
+</div>
       
       <div className="p-6">
         {/* Brand and Status Row */}
