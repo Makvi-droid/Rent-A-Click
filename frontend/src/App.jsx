@@ -9,6 +9,9 @@ import ProductsPage from "./pages/ProductsPage";
 import Wishlist from "./pages/Wishlist";
 import AdminDashboard from "./admin/pages/AdminDashBoard";
 import AddToCart from "./pages/AddToCart";
+import Checkout from "./pages/Checkout";
+import Inventory from "./admin/pages/Inventory"
+import MyRentals from "./pages/MyRentals";
 
 
 function App() {
@@ -26,6 +29,9 @@ function App() {
         <Route path="/wishlistPage" element={<Wishlist/>}/>
         <Route path="/adminDashboard" element={<AdminDashboard/>}/>
         <Route path="/cartPage" element={<AddToCart/>}/>
+        <Route path="/checkout" element={<Checkout/>}/>
+        <Route path="/inventory" element={<Inventory/>}/>
+        <Route path="/rentals" element={<MyRentals/>}/>
       </Routes>
       <Footer/>
     </ToastProvider>

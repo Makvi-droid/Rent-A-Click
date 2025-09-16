@@ -6,6 +6,8 @@ import ProductManagement from '../../components/admin/ProductManagement';
 import ComingSoon from '../../components/admin/ComingSoon';
 import Sidebar from '../../components/admin/Sidebar';
 import Header from '../../components/admin/Header';
+import Inventory from './Inventory'
+import OrderManagement from './OrderManagement';
 
 const AdminDashboard = () => {
 
@@ -36,9 +38,9 @@ const AdminDashboard = () => {
       case 'products':
         return <ProductManagement />;
       case 'orders':
-        return <ComingSoon title="Order Management" />;
+        return <OrderManagement/>;
       case 'inventory':
-        return <ComingSoon title="Inventory Management" />;
+        return <Inventory/>
       case 'users':
         return <ComingSoon title="User Management" />;
       case 'analytics':

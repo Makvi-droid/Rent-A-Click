@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -9,6 +10,7 @@ import CartItem from '../components/Cart/CartItem';
 import EmptyCart from '../components/Cart/EmptyCart';
 
 const AddToCart = () => {
+  const navigate = useNavigate();
   const [user, loading, error] = useAuthState(auth);
   const [cartItems, setCartItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -136,9 +138,37 @@ const AddToCart = () => {
     }
   };
 
+  // Handle proceed to checkout
+  const handleProceedToCheckout = () => {
+    if (selectedItems.size === 0) return;
+
+    // Get the selected cart items
+    const selectedCartItems = cartItems.filter(item => selectedItems.has(item.id));
+    
+    // Calculate total quantity and total amount (if you have price in your items)
+    const totalQuantity = selectedCartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+    const totalAmount = selectedCartItems.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+
+    // Navigate to checkout page with selected items data
+    navigate('/checkout', {
+      state: {
+        selectedItems: selectedCartItems,
+        totalQuantity: totalQuantity,
+        totalAmount: totalAmount,
+        userId: user.uid,
+        timestamp: new Date().toISOString()
+      }
+    });
+  };
+
   // Check if all items are selected
   const isAllSelected = cartItems.length > 0 && selectedItems.size === cartItems.length;
   const isPartiallySelected = selectedItems.size > 0 && selectedItems.size < cartItems.length;
+
+  // Calculate selected items total (if you have price in your items)
+  const selectedCartItems = cartItems.filter(item => selectedItems.has(item.id));
+  const selectedTotalQuantity = selectedCartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  const selectedTotalAmount = selectedCartItems.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
 
   // Show loading state
   if (loading || isLoading) {
@@ -236,17 +266,39 @@ const AddToCart = () => {
                 </div>
               </div>
 
-              {/* Checkout Section - You can add checkout summary here */}
+              {/* Checkout Section */}
               <div className="lg:col-span-1">
                 {selectedItems.size > 0 && (
                   <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 sticky top-8">
                     <h3 className="text-xl font-semibold text-white mb-4">
                       Checkout Summary
                     </h3>
-                    <p className="text-gray-300 mb-4">
-                      {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected for checkout
-                    </p>
-                    <button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-6 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-300">
+                    
+                    <div className="space-y-3 mb-6">
+                      <div className="flex justify-between text-gray-300">
+                        <span>Selected Items:</span>
+                        <span className="text-white font-medium">{selectedItems.size}</span>
+                      </div>
+                      
+                      <div className="flex justify-between text-gray-300">
+                        <span>Total Quantity:</span>
+                        <span className="text-white font-medium">{selectedTotalQuantity}</span>
+                      </div>
+                      
+                      {selectedTotalAmount > 0 && (
+                        <div className="flex justify-between text-gray-300 pt-2 border-t border-white/20">
+                          <span>Total Amount:</span>
+                          <span className="text-white font-semibold text-lg">
+                            ${selectedTotalAmount.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <button 
+                      onClick={handleProceedToCheckout}
+                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-6 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-300 transform hover:scale-105"
+                    >
                       Proceed to Checkout
                     </button>
                   </div>

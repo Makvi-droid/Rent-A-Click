@@ -120,10 +120,10 @@ function Navbar() {
             {/* Enhanced Desktop Menu */}
             <div className="hidden md:flex items-center space-x-8">
               {[
+                { name: 'Home', href: '/homePage', icon: Sparkles },
                 { name: 'Browse Cameras', href: '/productsPage', icon: Camera },
                 { name: 'My Rentals', href: '/rentals', icon: Clock },
-                { name: 'Wishlist', href: '/wishlistPage', icon: Heart },
-                { name: 'Support', href: '/support', icon: Shield }
+                { name: 'Wishlist', href: '/wishlistPage', icon: Heart }
               ].map((item, index) => (
                 <button 
                   key={item.name}
@@ -229,10 +229,10 @@ function Navbar() {
             </div>
 
             {[
+              { name: 'Home', href: '/homePage', icon: Sparkles },
               { name: 'Browse Cameras', href: '/productsPage', icon: Camera },
               { name: 'My Rentals', href: '/rentals', icon: Clock },
-              { name: 'Wishlist', href: '/wishlist', icon: Heart },
-              { name: 'Support', href: '/support', icon: Shield }
+              { name: 'Wishlist', href: '/wishlistPage', icon: Heart }
             ].map((item, index) => (
               <button 
                 key={item.name}

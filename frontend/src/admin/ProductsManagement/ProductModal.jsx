@@ -1,16 +1,14 @@
 import React, { useState, useRef } from 'react';
-import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { firestore } from '../../firebase';
-import { X, Upload, Link, Image } from 'lucide-react';
+import { X, Upload, Link, Image, Package } from 'lucide-react';
 
-const ProductModal = ({ product, onClose }) => {
+const ProductModal = ({ product, inventoryProducts = [], onClose, onSave }) => {
   const [formData, setFormData] = useState({
     name: product?.name || '',
     brand: product?.brand || '',
     price: product?.price || '',
-    category: product?.category || 'Digital Cameras',
-    subCategory: product?.subCategory || 'Mirrorless',
+    inventoryId: product?.inventoryId || '',
+    subCategory: product?.subCategory || '',
     status: product?.status || 'active',
     approved: product?.approved || false,
     imageUrl: product?.imageUrl || '',
@@ -25,13 +23,24 @@ const ProductModal = ({ product, onClose }) => {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
 
-  const categories = {
-    "Digital Cameras": ["Mirrorless", "Compact"],
-    "DSLR Cameras": ["Professional", "Mid-Range", "Entry-Level"],
-    "Instant Cameras": ["Mini", "Square", "Wide"],
-    "Media Storage": ["SD Cards", "CFexpress", "Micro SD"],
-    "Lenses": ["Prime", "Zoom"]
-  };
+  // Get selected inventory item
+  const selectedInventoryItem = inventoryProducts.find(item => item.id === formData.inventoryId);
+
+  const subCategories = {
+  "digital cameras": ["Mirrorless", "Compact"],
+  "dslr cameras": ["Professional", "Mid-Range", "Entry-Level"],
+  "instant cameras": ["Mini", "Square", "Wide"],
+  "media storage": ["SD Cards", "CFexpress", "Micro SD"],
+  "lenses": ["Prime", "Zoom"]
+};
+
+const categoryMap = {
+  "instant-cameras": "instant cameras",
+  "digital-cameras": "digital cameras",
+  "dslr-cameras": "dslr cameras",
+  "media-storage": "media storage",
+  "lenses": "lenses"
+};
 
   const statusOptions = [
     { value: 'active', label: 'Active' },
@@ -39,10 +48,40 @@ const ProductModal = ({ product, onClose }) => {
     { value: 'discontinued', label: 'Discontinued' }
   ];
 
-  // Optimized image compression - much faster approach
+  // Get available inventory items (not already used in products)
+  const getAvailableInventoryItems = () => {
+    // For edit mode, include the current product's inventory item
+    if (product && product.inventoryId) {
+      return inventoryProducts;
+    }
+    // For add mode, show all inventory items
+    return inventoryProducts;
+  };
+
+  // Group inventory items by category
+  const groupedInventoryItems = getAvailableInventoryItems().reduce((acc, item) => {
+    if (!acc[item.category]) {
+      acc[item.category] = [];
+    }
+    acc[item.category].push(item);
+    return acc;
+  }, {});
+
+  // Get available sub-categories for selected inventory item's category
+  const getAvailableSubCategories = () => {
+  if (!selectedInventoryItem || !selectedInventoryItem.category) return [];
+  
+  const key = selectedInventoryItem.category.trim().toLowerCase();
+  const mappedKey = categoryMap[key] || key;
+  
+  return subCategories[mappedKey] || [];
+};
+
+
+
+  // Optimized image compression
   const compressImage = (file, maxWidth = 800, maxHeight = 600, quality = 0.7) => {
     return new Promise((resolve, reject) => {
-      // Skip compression for small files (under 500KB)
       if (file.size < 500 * 1024) {
         resolve(file);
         return;
@@ -56,10 +95,8 @@ const ProductModal = ({ product, onClose }) => {
         try {
           let { width, height } = img;
           
-          // Calculate new dimensions maintaining aspect ratio
           const ratio = Math.min(maxWidth / width, maxHeight / height);
           
-          // Only resize if image is larger than target
           if (ratio < 1) {
             width = Math.floor(width * ratio);
             height = Math.floor(height * ratio);
@@ -68,15 +105,12 @@ const ProductModal = ({ product, onClose }) => {
           canvas.width = width;
           canvas.height = height;
           
-          // Use better image rendering
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Convert to blob with compression
           canvas.toBlob((blob) => {
             if (blob) {
-              // Only use compressed version if it's actually smaller
               const compressionRatio = blob.size / file.size;
               resolve(compressionRatio < 0.8 ? blob : file);
             } else {
@@ -94,16 +128,15 @@ const ProductModal = ({ product, onClose }) => {
       
       img.onerror = () => {
         URL.revokeObjectURL(img.src);
-        resolve(file); // Fallback to original file
+        resolve(file);
       };
       
       img.src = URL.createObjectURL(file);
     });
   };
 
-  // Validate file - more lenient size limit
   const validateFile = (file) => {
-    const maxSize = 25 * 1024 * 1024; // Increased to 25MB
+    const maxSize = 25 * 1024 * 1024;
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     
     if (!allowedTypes.includes(file.type.toLowerCase())) {
@@ -120,13 +153,21 @@ const ProductModal = ({ product, onClose }) => {
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     
-    if (name === 'category') {
-      const newSubCategory = categories[value]?.[0] || '';
+    if (name === 'inventoryId') {
+      const selectedItem = inventoryProducts.find(item => item.id === value);
       setFormData(prev => ({
         ...prev,
-        category: value,
-        subCategory: newSubCategory
+        inventoryId: value,
+        // Clear sub-category when inventory item changes
+        subCategory: '',
+        // Auto-set image from inventory if no custom image is set
+        ...(selectedItem && !prev.imageUrl && !imageFile ? { imageUrl: selectedItem.image } : {})
       }));
+      
+      // Update image preview if using inventory item's image
+      if (selectedItem && !formData.imageUrl && !imageFile) {
+        setImagePreview(selectedItem.image || '');
+      }
     } else {
       setFormData(prev => ({
         ...prev,
@@ -171,14 +212,12 @@ const ProductModal = ({ product, onClose }) => {
     try {
       validateFile(file);
       
-      // Show original preview immediately for better UX
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target.result);
       };
       reader.readAsDataURL(file);
       
-      // Compress image in background without blocking UI
       setTimeout(async () => {
         try {
           const compressedFile = await compressImage(file);
@@ -189,8 +228,6 @@ const ProductModal = ({ product, onClose }) => {
           
           if (compressedFile !== file) {
             console.log(`Image optimized: ${sizeBefore}KB → ${sizeAfter}KB`);
-          } else {
-            console.log(`Image size: ${sizeBefore}KB (no compression needed)`);
           }
         } catch (error) {
           console.warn('Image processing failed, using original:', error);
@@ -208,11 +245,9 @@ const ProductModal = ({ product, onClose }) => {
     }
   };
 
-  // Optimized upload with progress tracking
   const uploadImage = async (file) => {
     const storage = getStorage();
     
-    // Generate shorter filename
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(2, 8);
     const extension = file.type === 'image/png' ? 'png' : 'jpg';
@@ -221,7 +256,6 @@ const ProductModal = ({ product, onClose }) => {
     const storageRef = ref(storage, filename);
     
     try {
-      // Upload with progress tracking
       const snapshot = await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(snapshot.ref);
       return downloadURL;
@@ -237,12 +271,25 @@ const ProductModal = ({ product, onClose }) => {
     setUploadProgress(0);
 
     try {
+      // Validate required fields
+      if (!formData.name.trim()) {
+        throw new Error('Product name is required');
+      }
+      if (!formData.brand.trim()) {
+        throw new Error('Brand is required');
+      }
+      if (!formData.price || parseFloat(formData.price) <= 0) {
+        throw new Error('Valid price is required');
+      }
+      if (!formData.inventoryId) {
+        throw new Error('Please select an inventory item');
+      }
+
       let finalImageUrl = formData.imageUrl;
 
       if (imageFile) {
         setUploadProgress(20);
         
-        // Wait a moment to ensure compression is complete
         if (!imageFile.lastModified) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -252,25 +299,29 @@ const ProductModal = ({ product, onClose }) => {
         setUploadProgress(80);
       }
 
+      // If no custom image, use inventory item's image
+      if (!finalImageUrl && selectedInventoryItem?.image) {
+        finalImageUrl = selectedInventoryItem.image;
+      }
+
       const productData = {
         ...formData,
         price: parseFloat(formData.price),
         imageUrl: finalImageUrl,
-        createdAt: product?.createdAt || new Date(),
-        updatedAt: new Date()
+        // Inherit category from inventory item
+        category: selectedInventoryItem?.category || formData.category
       };
 
       setUploadProgress(90);
 
       if (product) {
-        await updateDoc(doc(firestore, 'products', product.id), productData);
+        await onSave(product.firestoreId, productData);
       } else {
-        await addDoc(collection(firestore, 'products'), productData);
+        await onSave(productData);
       }
 
       setUploadProgress(100);
       
-      // Small delay to show completion
       setTimeout(() => {
         onClose();
       }, 300);
@@ -327,6 +378,39 @@ const ProductModal = ({ product, onClose }) => {
             {/* Left Column - Product Details */}
             <div className="space-y-6">
               
+              {/* Inventory Selection */}
+              <div>
+                <label className="block text-white font-medium mb-2">
+                  Select Inventory Item *
+                  {selectedInventoryItem && (
+                    <span className="text-sm text-white/60 ml-2">
+                      (Stock: {selectedInventoryItem.stock})
+                    </span>
+                  )}
+                </label>
+                <select
+                  name="inventoryId"
+                  value={formData.inventoryId}
+                  onChange={handleInputChange}
+                  required
+                  disabled={uploading}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="" className="bg-slate-800 text-white">
+                    Select inventory item...
+                  </option>
+                  {Object.entries(groupedInventoryItems).map(([category, items]) => (
+                    <optgroup key={category} label={category} className="bg-slate-700 text-white">
+                      {items.map(item => (
+                        <option key={item.id} value={item.id} className="bg-slate-800 text-white">
+                          {item.id} - {item.category} (Stock: {item.stock})
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
               {/* Product Name */}
               <div>
                 <label className="block text-white font-medium mb-2">Product Name *</label>
@@ -374,37 +458,31 @@ const ProductModal = ({ product, onClose }) => {
                 />
               </div>
 
-              {/* Category and Sub-category */}
+              {/* Category (Read-only from inventory) and Sub-category */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-white font-medium mb-2">Category *</label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    required
-                    disabled={uploading}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                  >
-                    {Object.keys(categories).map(category => (
-                      <option key={category} value={category} className="bg-slate-800 text-white">
-                        {category}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-white font-medium mb-2">Category</label>
+                  <input
+                    type="text"
+                    value={selectedInventoryItem?.category || 'Select inventory item first'}
+                    disabled
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/60 cursor-not-allowed"
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-white font-medium mb-2">Sub-category *</label>
+                  <label className="block text-white font-medium mb-2">Sub-category</label>
                   <select
                     name="subCategory"
                     value={formData.subCategory}
                     onChange={handleInputChange}
-                    required
-                    disabled={uploading}
+                    disabled={uploading || !selectedInventoryItem}
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                   >
-                    {(categories[formData.category] || []).map(subCategory => (
+                    <option value="" className="bg-slate-800 text-white">
+                      {!selectedInventoryItem ? 'Select inventory item first' : 'Select sub-category...'}
+                    </option>
+                    {getAvailableSubCategories().map(subCategory => (
                       <option key={subCategory} value={subCategory} className="bg-slate-800 text-white">
                         {subCategory}
                       </option>
@@ -412,6 +490,18 @@ const ProductModal = ({ product, onClose }) => {
                   </select>
                 </div>
               </div>
+
+              {/* Stock Display (Read-only) */}
+              {selectedInventoryItem && (
+                <div>
+                  <label className="block text-white font-medium mb-2">Current Stock</label>
+                  <div className="flex items-center space-x-3 px-4 py-3 bg-white/5 border border-white/10 rounded-lg">
+                    <Package className="w-5 h-5 text-white/60" />
+                    <span className="text-white font-medium">{selectedInventoryItem.stock} units</span>
+                    <span className="text-xs text-white/60">(Managed by Inventory)</span>
+                  </div>
+                </div>
+              )}
 
               {/* Status and Approval */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -556,7 +646,7 @@ const ProductModal = ({ product, onClose }) => {
                           Supports: JPG, PNG, WebP up to 25MB
                         </p>
                         <p className="text-white/40 text-xs mt-1">
-                          Images are automatically optimized for faster upload
+                          Leave empty to use inventory item's image
                         </p>
                       </div>
                     </div>
@@ -594,7 +684,12 @@ const ProductModal = ({ product, onClose }) => {
                   </div>
                   {imageFile && (
                     <p className="text-white/60 text-xs mt-2 text-center">
-                      Ready for upload - optimized for speed
+                      Custom image ready for upload
+                    </p>
+                  )}
+                  {!imageFile && formData.imageUrl === selectedInventoryItem?.image && (
+                    <p className="text-white/60 text-xs mt-2 text-center">
+                      Using inventory item's image
                     </p>
                   )}
                 </div>
@@ -614,7 +709,7 @@ const ProductModal = ({ product, onClose }) => {
             </button>
             <button
               type="submit"
-              disabled={uploading}
+              disabled={uploading || !formData.inventoryId}
               className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center space-x-2"
             >
               {uploading && (

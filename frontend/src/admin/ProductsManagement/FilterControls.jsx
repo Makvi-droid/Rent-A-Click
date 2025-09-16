@@ -14,14 +14,14 @@ const FilterControls = ({
   selectedApproval,
   setSelectedApproval
 }) => {
-  const categories = ["All", "Digital Cameras", "DSLR Cameras", "Instant Cameras", "Media Storage", "Lenses"];
+  const categories = ["All", "digital-cameras", "dslr-cameras", "instant-cameras", "media-storage", "lenses"];
   
   const subCategories = {
-    "Digital Cameras": ["All", "Mirrorless", "Compact"],
-    "DSLR Cameras": ["All", "Professional", "Mid-Range", "Entry-Level"],
-    "Instant Cameras": ["All", "Mini", "Square", "Wide"],
-    "Media Storage": ["All", "SD Cards", "CFexpress", "Micro SD"],
-    "Lenses": ["All", "Prime", "Zoom"]
+    "digital-cameras": ["All", "Mirrorless", "Compact"],
+    "dslr-cameras": ["All", "Professional", "Mid-Range", "Entry-Level"],
+    "instant-cameras": ["All", "Mini", "Square", "Wide"],
+    "media-storage": ["All", "SD Cards", "CFexpress", "Micro SD"],
+    "lenses": ["All", "Prime", "Zoom"]
   };
 
   const statusOptions = [

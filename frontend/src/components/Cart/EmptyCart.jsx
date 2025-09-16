@@ -46,12 +46,7 @@ const EmptyCart = () => {
           </button>
         </div>
         
-        {/* Additional Info */}
-        <div className="mt-8 pt-6 border-t border-white/20">
-          <p className="text-gray-400 text-sm">
-            💡 Tip: Save items to your wishlist for later!
-          </p>
-        </div>
+        
       </div>
     </div>
   );
