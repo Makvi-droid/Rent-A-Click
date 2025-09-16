@@ -12,6 +12,9 @@ import AddToCart from "./pages/AddToCart";
 import Checkout from "./pages/Checkout";
 import Inventory from "./admin/pages/Inventory"
 import MyRentals from "./pages/MyRentals";
+import UserManagement from "./admin/pages/UserManagement";
+import Dashboard from "./admin/pages/Dashboard";
+import { db } from "./firebase";
 
 
 function App() {
@@ -32,6 +35,8 @@ function App() {
         <Route path="/checkout" element={<Checkout/>}/>
         <Route path="/inventory" element={<Inventory/>}/>
         <Route path="/rentals" element={<MyRentals/>}/>
+        <Route path="/userManagement" element={<UserManagement/>}/>
+        <Route path="/dashboard" element={<Dashboard/>}/>
       </Routes>
       <Footer/>
     </ToastProvider>

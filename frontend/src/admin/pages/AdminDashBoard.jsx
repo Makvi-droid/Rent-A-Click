@@ -1,13 +1,14 @@
 // Main Dashboard Component
 
 import React, { useState } from 'react';
-import Dashboard from '../../components/admin/Dashboard';
+import Dashboard from './Dashboard';
 import ProductManagement from '../../components/admin/ProductManagement';
 import ComingSoon from '../../components/admin/ComingSoon';
 import Sidebar from '../../components/admin/Sidebar';
 import Header from '../../components/admin/Header';
 import Inventory from './Inventory'
 import OrderManagement from './OrderManagement';
+import UserManagement from './UserManagement';
 
 const AdminDashboard = () => {
 
@@ -34,7 +35,7 @@ const AdminDashboard = () => {
   const renderContent = () => {
     switch (activeSection) {
       case 'dashboard':
-        return <Dashboard stats={mockStats} />;
+        return <Dashboard/>;
       case 'products':
         return <ProductManagement />;
       case 'orders':
@@ -42,7 +43,7 @@ const AdminDashboard = () => {
       case 'inventory':
         return <Inventory/>
       case 'users':
-        return <ComingSoon title="User Management" />;
+        return <UserManagement/>;
       case 'analytics':
         return <ComingSoon title="Analytics & Reports" />;
       case 'settings':

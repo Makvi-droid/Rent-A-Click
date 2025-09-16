@@ -141,14 +141,15 @@ const ProfilePage = () => {
   const handleNavigation = (path) => {
     console.log('Navigating to:', path);
     // In your actual app, replace this with: navigate(path);
+    navigate(path)
   };
 
   const handleQuickAction = (actionId) => {
     const routes = {
       browse: '/productsPage',
-      rentals: '/my-rentals',
-      wishlist: '/wishlist',
-      cart: '/cart'
+      rentals: '/rentals',
+      wishlist: '/wishlistPage',
+      cart: '/cartPage'
     };
     handleNavigation(routes[actionId]);
   };
@@ -313,7 +314,7 @@ const ProfilePage = () => {
               icon={Bell}
               onClick={() => handleNavigation('/notifications')}
               color="green"
-              badge="3"
+              badge=""
             />
             
             <NavigationCard

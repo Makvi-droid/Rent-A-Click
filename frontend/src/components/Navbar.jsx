@@ -157,7 +157,7 @@ function Navbar() {
                   <ShoppingBag className="w-5 h-5 relative z-10" />
                   {/* Cart count badge */}
                   <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-pink-500 to-purple-500 rounded-full flex items-center justify-center text-xs font-bold text-white">
-                    3
+                    
                   </div>
                 </button>
 
