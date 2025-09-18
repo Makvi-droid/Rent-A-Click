@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Trash2, ShoppingCart, Star, Filter, Search, Grid, List, Package, SortAsc } from 'lucide-react';
-import { doc, updateDoc, arrayUnion, getDoc, setDoc } from 'firebase/firestore';
-import { firestore as db } from '../../firebase'; // Fixed: Using firestore as db
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../../firebase';
+import { useToast } from '../Authentication/Toast'; // Import the useToast hook
 
 // WishlistItem Component
 const WishlistItem = ({ item, onRemove, onAddToCart, viewMode }) => {
@@ -11,180 +10,94 @@ const WishlistItem = ({ item, onRemove, onAddToCart, viewMode }) => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [user, loading, error] = useAuthState(auth);
+  const { showSuccess, showError, showWarning } = useToast(); // Use the toast hook
 
   const handleRemove = async () => {
     setIsRemoving(true);
     try {
       await onRemove(item.id);
+      showSuccess(`${item.name || 'Item'} removed from wishlist`);
     } catch (error) {
       console.error('Error removing item:', error);
-      alert('Failed to remove item from wishlist');
+      showError('Failed to remove item from wishlist');
     } finally {
       setIsRemoving(false);
     }
   };
 
-  // Enhanced add to cart function with Firebase integration
   const handleAddToCart = async (item) => {
     console.log('Add to cart clicked for item:', item);
     console.log('Current user:', user);
 
-    // Check if auth is still loading
     if (loading) {
-      alert('Please wait, checking authentication...');
+      showWarning('Please wait, checking authentication...');
       return;
     }
 
     if (!user) {
-      alert('Please log in to add items to cart');
+      showError('Please log in to add items to cart');
       return;
     }
 
     setIsAddingToCart(true);
     
     try {
-      // Validate required item data
-      if (!item.id && !item.name) {
-        throw new Error('Item is missing required data (id or name)');
-      }
-
-      // Create cart item object with better validation
-      const cartItem = {
-        id: item.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: item.name || 'Unknown Item',
-        price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
-        originalPrice: item.originalPrice ? (typeof item.originalPrice === 'number' ? item.originalPrice : parseFloat(item.originalPrice)) : null,
-        description: item.description || '',
-        imageUrl: getImageUrl(item),
-        rating: item.rating || null,
-        quantity: 1,
-        addedAt: new Date().toISOString(),
-        category: item.category || null,
-        brand: item.brand || null,
-      };
-
-      console.log('Cart item to be added:', cartItem);
-
-      // Reference to the user's document
-      const userDocRef = doc(db, 'users', user.uid);
-      console.log('User document reference:', userDocRef.path);
-      
-      try {
-        // Check if user document exists and get current cart
-        const userDoc = await getDoc(userDocRef);
-        console.log('User document exists:', userDoc.exists());
+      if (onAddToCart && typeof onAddToCart === 'function') {
+        await onAddToCart(item);
+        console.log('Successfully added item to cart via parent component');
         
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          console.log('Current user data keys:', Object.keys(userData));
-          const currentCart = Array.isArray(userData.cart) ? userData.cart : [];
-          console.log('Current cart length:', currentCart.length);
-          
-          // Check if item already exists in cart (more robust comparison)
-          const existingItemIndex = currentCart.findIndex(cartItem => 
-            cartItem.id === item.id || 
-            (cartItem.name === item.name && cartItem.price === item.price)
-          );
-          console.log('Existing item index:', existingItemIndex);
-          
-          if (existingItemIndex > -1) {
-            // Item exists, update quantity
-            const updatedCart = [...currentCart];
-            updatedCart[existingItemIndex] = {
-              ...updatedCart[existingItemIndex],
-              quantity: (updatedCart[existingItemIndex].quantity || 1) + 1,
-              addedAt: new Date().toISOString()
-            };
-            
-            console.log('Updating existing item in cart:', updatedCart[existingItemIndex]);
-            
-            await updateDoc(userDocRef, {
-              cart: updatedCart
-            });
-            
-            alert(`Updated quantity! You now have ${updatedCart[existingItemIndex].quantity} of this item in your cart.`);
-          } else {
-            // Item doesn't exist, add to cart
-            console.log('Adding new item to cart');
-            const updatedCart = [...currentCart, cartItem];
-            
-            await updateDoc(userDocRef, {
-              cart: updatedCart
-            });
-            
-            alert('Item added to cart successfully!');
-          }
-        } else {
-          // User document doesn't exist, create it with the cart item
-          console.log('Creating new user document with cart item');
-          
-          const newUserData = {
-            cart: [cartItem],
-            createdAt: new Date().toISOString(),
-            uid: user.uid,
-            email: user.email || null,
-            displayName: user.displayName || null,
-            lastUpdated: new Date().toISOString(),
-          };
-          
-          await setDoc(userDocRef, newUserData);
-          alert('Item added to cart successfully!');
-        }
-
-        // Call the parent component's onAddToCart if provided
-        if (onAddToCart && typeof onAddToCart === 'function') {
-          onAddToCart(item);
-        }
-
-        console.log('Successfully added item to cart');
-
-      } catch (firestoreError) {
-        console.error('Firestore operation error:', firestoreError);
+        // Show success toast notification
+        showSuccess(`${item.name || 'Item'} added to cart successfully!`);
         
-        // More specific error handling
-        if (firestoreError.code === 'permission-denied') {
-          alert('Permission denied. Please check your Firebase Security Rules or try logging out and back in.');
-        } else if (firestoreError.code === 'not-found') {
-          alert('Database not found. Please check your Firebase configuration.');
-        } else if (firestoreError.code === 'unavailable') {
-          alert('Firebase service is temporarily unavailable. Please try again.');
-        } else if (firestoreError.code === 'unauthenticated') {
-          alert('Authentication expired. Please log out and log back in.');
-        } else {
-          alert(`Failed to add item to cart: ${firestoreError.message}`);
-        }
+      } else {
+        throw new Error('No add to cart function provided by parent component');
       }
 
     } catch (error) {
-      console.error('General error adding item to cart:', error);
-      alert(`An error occurred: ${error.message}`);
+      console.error('Error adding item to cart:', error);
+      showError(`Failed to add ${item.name || 'item'} to cart: ${error.message}`);
     } finally {
       setIsAddingToCart(false);
     }
   };
 
-  // Helper function to get the correct image URL
+  // Enhanced image URL helper function with better debugging
   const getImageUrl = (item) => {
-    if (!item) return '';
+    if (!item) {
+      console.log('❌ No item provided to getImageUrl');
+      return '';
+    }
+    
+    console.log('🔍 Checking item for images:', {
+      itemId: item.id,
+      itemKeys: Object.keys(item),
+      itemData: item
+    });
     
     // Try different possible field names for the image
     const possibleImageFields = [
-      'imageUrl', 'image', 'images', 'photoURL', 'picture', 'thumbnail', 'img'
+      'imageUrl', 'image', 'images', 'imageUrls', 'photoURL', 'photos', 'picture', 'thumbnail', 'img'
     ];
     
     for (const field of possibleImageFields) {
       if (item[field]) {
+        console.log(`✅ Found image in field '${field}':`, item[field]);
+        
         // Handle arrays (take first image)
         if (Array.isArray(item[field]) && item[field].length > 0) {
+          console.log(`📷 Using first image from array:`, item[field][0]);
           return item[field][0];
         }
+        
         // Handle strings
         if (typeof item[field] === 'string' && item[field].trim()) {
+          console.log(`📷 Using image URL:`, item[field]);
           return item[field];
         }
       }
     }
     
+    console.log('❌ No valid image found in item');
     return '';
   };
 
@@ -192,17 +105,38 @@ const WishlistItem = ({ item, onRemove, onAddToCart, viewMode }) => {
   const discount = item.originalPrice && item.price ? 
     Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100) : 0;
 
-  // Debug: Log item data
+  // Enhanced debug logging
   useEffect(() => {
-    console.log('WishlistItem rendered with item:', item);
+    console.log('=== WishlistItem Debug Info ===');
+    console.log('Item ID:', item?.id);
+    console.log('Item name:', item?.name);
+    console.log('Full item object:', item);
+    console.log('Image URL determined:', imageUrl);
+    console.log('Image URL length:', imageUrl?.length);
+    console.log('Image URL type:', typeof imageUrl);
     console.log('User authenticated:', !!user);
     console.log('Auth loading:', loading);
-    console.log('Auth error:', error);
     if (user) {
       console.log('User ID:', user.uid);
       console.log('User email:', user.email);
     }
-  }, [item, user, loading, error]);
+    console.log('================================');
+  }, [item, user, loading, error, imageUrl]);
+
+  // Enhanced image load handlers
+  const handleImageLoad = () => {
+    console.log('✅ Image loaded successfully:', imageUrl);
+    setImageLoaded(true);
+  };
+
+  const handleImageError = (e) => {
+    console.error('❌ Image failed to load:', {
+      src: e.target.src,
+      error: e,
+      originalUrl: imageUrl
+    });
+    setImageLoaded(true); // Set to true to hide loading state
+  };
 
   // Show loading state if auth is still loading
   if (loading) {
@@ -228,17 +162,16 @@ const WishlistItem = ({ item, onRemove, onAddToCart, viewMode }) => {
               <img 
                 src={imageUrl} 
                 alt={item.name || 'Product image'}
-                onLoad={() => setImageLoaded(true)}
-                onError={(e) => {
-                  console.log('Image failed to load:', imageUrl);
-                  console.log('Error details:', e);
-                  setImageLoaded(true);
-                }}
+                onLoad={handleImageLoad}
+                onError={handleImageError}
                 className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gray-200">
                 <Package className="w-8 h-8 text-gray-400" />
+                <div className="absolute bottom-0 left-0 right-0 bg-red-500 text-white text-xs p-1 text-center">
+                  No Image
+                </div>
               </div>
             )}
           </div>
@@ -246,6 +179,11 @@ const WishlistItem = ({ item, onRemove, onAddToCart, viewMode }) => {
           <div className="flex-1 min-w-0">
             <h3 className="text-xl font-semibold text-gray-900 mb-2 truncate">{item.name || 'Unnamed Item'}</h3>
             <p className="text-gray-600 text-sm mb-3 line-clamp-2">{item.description || 'No description available'}</p>
+            
+            {/* Debug info display */}
+            <div className="text-xs text-gray-400 mb-2">
+              ID: {item.id} | Image: {imageUrl ? '✅' : '❌'} | Fields: {Object.keys(item).join(', ')}
+            </div>
             
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -306,17 +244,19 @@ const WishlistItem = ({ item, onRemove, onAddToCart, viewMode }) => {
           <img 
             src={imageUrl} 
             alt={item.name || 'Product image'}
-            onLoad={() => setImageLoaded(true)}
-            onError={(e) => {
-              console.log('Image failed to load:', imageUrl);
-              console.log('Error details:', e);
-              setImageLoaded(true);
-            }}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
             className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-110 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-200">
-            <Package className="w-12 h-12 text-gray-400" />
+          <div className="w-full h-full flex items-center justify-center bg-gray-200 flex-col">
+            <Package className="w-12 h-12 text-gray-400 mb-2" />
+            <div className="text-xs text-gray-500 text-center px-2">
+              No Image Available
+            </div>
+            <div className="text-xs text-red-500 text-center px-2 mt-1">
+              ID: {item.id}
+            </div>
           </div>
         )}
         

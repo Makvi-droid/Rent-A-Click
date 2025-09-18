@@ -28,25 +28,113 @@ const CartItem = ({ item, onQuantityUpdate, onRemove, onSelect, isSelected = fal
     onSelect(item.id, !isSelected);
   };
 
-  // Helper function to get the correct image URL
+  // ENHANCED: More comprehensive image URL detection with debugging
   const getImageUrl = (item) => {
-    if (!item) return '';
+    if (!item) {
+      console.log('CartItem: No item provided to getImageUrl');
+      return '';
+    }
     
-    const possibleImageFields = [
-      'imageUrl', 'image', 'images', 'photoURL', 'picture', 'thumbnail', 'img'
+    console.log('CartItem: Analyzing item for images:', {
+      itemId: item.id,
+      itemName: item.name,
+      availableFields: Object.keys(item)
+    });
+    
+    // Comprehensive list of image field possibilities
+    const imageFields = [
+      'image',           // Primary field
+      'imageUrl',        // Common alternative
+      'images',          // Array field
+      'imageUrls',       // Array of URLs
+      'photos',          // Alternative naming
+      'photoURL',        // Firebase style
+      'picture',         // Generic
+      'thumbnail',       // Thumbnail
+      'img',             // Short form
+      'mainImage',       // Main product image
+      'primaryImage',    // Primary image
+      'featuredImage',   // Featured image
+      'productImage',    // Product specific
+      'productImages',   // Multiple product images
+      'galleryImages',   // Gallery images
+      'media'            // Media field
     ];
     
-    for (const field of possibleImageFields) {
+    // Check each field systematically
+    for (const field of imageFields) {
       if (item[field]) {
-        if (Array.isArray(item[field]) && item[field].length > 0) {
-          return item[field][0];
+        console.log(`CartItem: Found potential image in field '${field}':`, item[field]);
+        
+        if (Array.isArray(item[field])) {
+          // Handle arrays - find first valid image URL
+          const validImages = item[field].filter(img => 
+            img && 
+            typeof img === 'string' && 
+            img.trim().length > 0 &&
+            (img.startsWith('http') || img.startsWith('data:') || img.startsWith('/'))
+          );
+          
+          if (validImages.length > 0) {
+            console.log(`CartItem: Using first valid image from ${field} array:`, validImages[0]);
+            return validImages[0];
+          }
+        } else if (typeof item[field] === 'string') {
+          // Handle string URLs
+          const cleanUrl = item[field].trim();
+          if (cleanUrl.length > 0 && (cleanUrl.startsWith('http') || cleanUrl.startsWith('data:') || cleanUrl.startsWith('/'))) {
+            console.log(`CartItem: Using image from ${field}:`, cleanUrl);
+            return cleanUrl;
+          }
+        } else if (typeof item[field] === 'object' && item[field] !== null) {
+          // Handle nested objects
+          const nestedFields = ['url', 'src', 'href', 'link', 'path'];
+          for (const nestedField of nestedFields) {
+            if (item[field][nestedField] && typeof item[field][nestedField] === 'string') {
+              const nestedUrl = item[field][nestedField].trim();
+              if (nestedUrl.length > 0 && (nestedUrl.startsWith('http') || nestedUrl.startsWith('data:') || nestedUrl.startsWith('/'))) {
+                console.log(`CartItem: Using nested image from ${field}.${nestedField}:`, nestedUrl);
+                return nestedUrl;
+              }
+            }
+          }
         }
-        if (typeof item[field] === 'string' && item[field].trim()) {
-          return item[field];
+      }
+    }
+
+    // Check if originalData exists (backup data from wishlist)
+    if (item.originalData) {
+      console.log('CartItem: Checking originalData for images...');
+      for (const field of imageFields) {
+        if (item.originalData[field]) {
+          const originalImage = item.originalData[field];
+          if (typeof originalImage === 'string' && originalImage.trim().length > 0) {
+            console.log(`CartItem: Using image from originalData.${field}:`, originalImage);
+            return originalImage;
+          }
+          if (Array.isArray(originalImage) && originalImage.length > 0) {
+            console.log(`CartItem: Using first image from originalData.${field}:`, originalImage[0]);
+            return originalImage[0];
+          }
+        }
+      }
+    }
+
+    // Check sourceData as final fallback
+    if (item.sourceData) {
+      console.log('CartItem: Checking sourceData for images...');
+      for (const field of imageFields) {
+        if (item.sourceData[field]) {
+          const sourceImage = item.sourceData[field];
+          if (typeof sourceImage === 'string' && sourceImage.trim().length > 0) {
+            console.log(`CartItem: Using image from sourceData.${field}:`, sourceImage);
+            return sourceImage;
+          }
         }
       }
     }
     
+    console.log('CartItem: No valid image found for item:', item.id);
     return '';
   };
 
@@ -56,6 +144,20 @@ const CartItem = ({ item, onQuantityUpdate, onRemove, onSelect, isSelected = fal
   const originalPrice = item.originalPrice ? (typeof item.originalPrice === 'number' ? item.originalPrice : parseFloat(item.originalPrice)) : null;
   const discount = originalPrice && price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
   const subtotal = price * quantity;
+
+  const handleImageLoad = () => {
+    console.log('CartItem: Image loaded successfully for', item.name);
+    setImageLoaded(true);
+  };
+
+  const handleImageError = (e) => {
+    console.error('CartItem: Image failed to load:', {
+      src: e.target.src,
+      itemId: item.id,
+      itemName: item.name
+    });
+    setImageLoaded(true); // Set to true to hide loading state
+  };
 
   if (viewMode === 'list') {
     return (
@@ -84,13 +186,19 @@ const CartItem = ({ item, onQuantityUpdate, onRemove, onSelect, isSelected = fal
               <img 
                 src={imageUrl} 
                 alt={item.name || 'Product image'}
-                onLoad={() => setImageLoaded(true)}
-                onError={() => setImageLoaded(true)}
+                onLoad={handleImageLoad}
+                onError={handleImageError}
                 className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                <Package className="w-8 h-8 text-gray-400" />
+              <div className="w-full h-full flex items-center justify-center bg-gray-200 flex-col">
+                <Package className="w-8 h-8 text-gray-400 mb-1" />
+                <div className="text-xs text-gray-500 text-center px-1">No Image</div>
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="text-xs text-red-500 text-center px-1 mt-1">
+                    ID: {item.id}
+                  </div>
+                )}
               </div>
             )}
             {discount > 0 && (
@@ -212,13 +320,19 @@ const CartItem = ({ item, onQuantityUpdate, onRemove, onSelect, isSelected = fal
           <img 
             src={imageUrl} 
             alt={item.name || 'Product image'}
-            onLoad={() => setImageLoaded(true)}
-            onError={() => setImageLoaded(true)}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
             className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-110 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-200">
-            <Package className="w-12 h-12 text-gray-400" />
+          <div className="w-full h-full flex items-center justify-center bg-gray-200 flex-col">
+            <Package className="w-12 h-12 text-gray-400 mb-2" />
+            <div className="text-sm text-gray-500 text-center px-2">No Image Available</div>
+            {process.env.NODE_ENV === 'development' && (
+              <div className="text-xs text-red-500 text-center px-2 mt-1">
+                Debug: {item.id}
+              </div>
+            )}
           </div>
         )}
         

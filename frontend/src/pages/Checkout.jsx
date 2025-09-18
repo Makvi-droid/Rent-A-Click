@@ -1,16 +1,15 @@
-// Main Checkout Component - Enhanced with PayPal Integration
+// Enhanced Checkout Component - Optimized for Customers Collection
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../firebase';
 import { useCart } from '../hooks/useCart';
-// Import PayPal at the top
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
-// Add Firestore imports
 import { 
   collection, 
   addDoc, 
   query, 
+  where,
   orderBy, 
   limit, 
   getDocs,
@@ -18,9 +17,10 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
   serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../firebase'; // Make sure you export db from your firebase config
+import { db } from '../firebase';
 
 // Component imports
 import CheckoutSteps from "../components/Checkout/CheckoutSteps";
@@ -32,13 +32,12 @@ import CheckoutFormSection from "../components/Checkout/CheckoutFormSection";
 import CheckoutTrustIndicators from "../components/Checkout/CheckoutTrustIndicators";
 import Navbar from "../components/Navbar";
 
-
 const Checkout = ({ 
   userData = null, 
   onOrderComplete = () => {}
 }) => {
   const [user, authLoading] = useAuthState(auth);
-  const { clearCart } = useCart(); // Only need clearCart function
+  const { clearCart } = useCart();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -46,6 +45,10 @@ const Checkout = ({
   const [isVisible, setIsVisible] = useState(false);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [customerData, setCustomerData] = useState(null);
+  const [customerDocId, setCustomerDocId] = useState(null);
+  const [loadingCustomerData, setLoadingCustomerData] = useState(true);
+  const [shouldCreateCustomerProfile, setShouldCreateCustomerProfile] = useState(false);
 
   // PayPal state variables
   const [paymentStatus, setPaymentStatus] = useState(null);
@@ -55,47 +58,215 @@ const Checkout = ({
   const selectedItemsFromCart = location.state?.selectedItems || [];
   const totalQuantityFromCart = location.state?.totalQuantity || 0;
   const totalAmountFromCart = location.state?.totalAmount || 0;
+  const customerId = location.state?.customerId || null;
+
+  // Enhanced function to find customer document by firebaseUid
+  const findCustomerDoc = async (firebaseUid) => {
+    try {
+      const customersRef = collection(db, 'customers');
+      const q = query(customersRef, where('firebaseUid', '==', firebaseUid));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const customerDoc = querySnapshot.docs[0];
+        return {
+          id: customerDoc.id,
+          data: customerDoc.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error finding customer document:', error);
+      return null;
+    }
+  };
+
+  // Enhanced function to create a new customer profile
+  const createCustomerProfile = async (firebaseUid, userData) => {
+    try {
+      const customersRef = collection(db, 'customers');
+      
+      const newCustomerData = {
+        firebaseUid: firebaseUid,
+        firstName: userData?.displayName?.split(' ')[0] || '',
+        lastName: userData?.displayName?.split(' ').slice(1).join(' ') || '',
+        email: userData?.email || '',
+        phone: '',
+        address: '',
+        apartment: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        paypalEmail: '',
+        newsletter: false,
+        cart: [],
+        orderHistory: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        profileCompleted: false,
+        lastLoginAt: serverTimestamp(),
+        accountStatus: 'active',
+        preferences: {
+          emailNotifications: true,
+          smsNotifications: false,
+          marketingEmails: false
+        }
+      };
+
+      const docRef = await addDoc(customersRef, newCustomerData);
+      
+      console.log('New customer profile created:', docRef.id);
+      
+      return {
+        id: docRef.id,
+        data: newCustomerData
+      };
+    } catch (error) {
+      console.error('Error creating customer profile:', error);
+      throw error;
+    }
+  };
+
+  // Enhanced customer data fetching with auto-creation
+  useEffect(() => {
+    const fetchCustomerData = async () => {
+      if (!user) {
+        setLoadingCustomerData(false);
+        return;
+      }
+
+      try {
+        setLoadingCustomerData(true);
+        
+        let customerDoc = null;
+        
+        // Try to get customer data using customerId from cart page first
+        if (customerId) {
+          try {
+            const customerRef = doc(db, 'customers', customerId);
+            const customerSnapshot = await getDoc(customerRef);
+            if (customerSnapshot.exists()) {
+              customerDoc = {
+                id: customerSnapshot.id,
+                data: customerSnapshot.data()
+              };
+            }
+          } catch (error) {
+            console.warn('Error fetching customer by ID, falling back to firebaseUid query:', error);
+          }
+        }
+        
+        // Fallback: find by firebaseUid if customerId method failed
+        if (!customerDoc) {
+          customerDoc = await findCustomerDoc(user.uid);
+        }
+        
+        if (customerDoc) {
+          setCustomerDocId(customerDoc.id);
+          setCustomerData(customerDoc.data);
+          setShouldCreateCustomerProfile(false);
+          console.log('Customer data loaded:', customerDoc.data);
+        } else {
+          // Customer doesn't exist, prepare for creation
+          console.warn('Customer document not found for user:', user.uid);
+          setShouldCreateCustomerProfile(true);
+          setCustomerDocId(null);
+          setCustomerData(null);
+          
+          // Optionally auto-create customer profile
+          try {
+            const newCustomerDoc = await createCustomerProfile(user.uid, user);
+            setCustomerDocId(newCustomerDoc.id);
+            setCustomerData(newCustomerDoc.data);
+            setShouldCreateCustomerProfile(false);
+            console.log('Auto-created customer profile:', newCustomerDoc.id);
+          } catch (createError) {
+            console.error('Failed to auto-create customer profile:', createError);
+            // Keep the shouldCreateCustomerProfile flag true for manual handling
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching customer data:', error);
+        setCustomerDocId(null);
+        setCustomerData(null);
+        setShouldCreateCustomerProfile(true);
+      } finally {
+        setLoadingCustomerData(false);
+      }
+    };
+
+    if (!authLoading) {
+      fetchCustomerData();
+    }
+  }, [user, authLoading, customerId]);
 
   // Redirect if no selected items
   useEffect(() => {
-    if (!authLoading && selectedItemsFromCart.length === 0) {
-      // Redirect back to cart if no items selected
+    if (!authLoading && !loadingCustomerData && selectedItemsFromCart.length === 0) {
       navigate('/cartPage', { replace: true });
     }
-  }, [authLoading, selectedItemsFromCart, navigate]);
+  }, [authLoading, loadingCustomerData, selectedItemsFromCart, navigate]);
 
-  // Initialize form data with user data if available
+  // Enhanced form data initialization
   const [formData, setFormData] = useState({
     // Rental Details
     startDate: null,
     endDate: null,
-    deliveryMethod: "pickup", // pickup or delivery
+    deliveryMethod: "pickup",
 
-    // Customer Information (pre-fill with user data if available)
-    firstName: userData?.firstName || user?.displayName?.split(' ')[0] || "",
-    lastName: userData?.lastName || user?.displayName?.split(' ').slice(1).join(' ') || "",
-    email: userData?.email || user?.email || "",
-    phone: userData?.phone || "",
+    // Customer Information
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
 
-    // Delivery Address (if delivery selected, pre-fill with user address)
-    address: userData?.address || "",
-    apartment: userData?.apartment || "",
-    city: userData?.city || "",
-    state: userData?.state || "",
-    zipCode: userData?.zipCode || "",
+    // Delivery Address
+    address: "",
+    apartment: "",
+    city: "",
+    state: "",
+    zipCode: "",
 
     // Payment Method
-    paymentMethod: "cash", // cash or paypal
-    paypalEmail: userData?.paypalEmail || "",
+    paymentMethod: "cash",
+    paypalEmail: "",
 
     // Additional Options
     insurance: false,
-    newsletter: userData?.newsletter || false,
+    newsletter: false,
     specialInstructions: "",
     termsAccepted: false,
   });
 
-  // Use selected items from cart instead of entire cart
+  // Update form data when customer data is loaded
+  useEffect(() => {
+    if (customerData) {
+      setFormData(prev => ({
+        ...prev,
+        firstName: customerData.firstName || user?.displayName?.split(' ')[0] || "",
+        lastName: customerData.lastName || user?.displayName?.split(' ').slice(1).join(' ') || "",
+        email: customerData.email || user?.email || "",
+        phone: customerData.phone || "",
+        address: customerData.address || "",
+        apartment: customerData.apartment || "",
+        city: customerData.city || "",
+        state: customerData.state || "",
+        zipCode: customerData.zipCode || "",
+        paypalEmail: customerData.paypalEmail || "",
+        newsletter: customerData.newsletter || false,
+      }));
+    } else if (user) {
+      // If no customer data but user exists, use user data
+      setFormData(prev => ({
+        ...prev,
+        firstName: user.displayName?.split(' ')[0] || "",
+        lastName: user.displayName?.split(' ').slice(1).join(' ') || "",
+        email: user.email || "",
+      }));
+    }
+  }, [customerData, user]);
+
+  // Use selected items from cart
   const rentalItems = selectedItemsFromCart;
 
   // PayPal configuration
@@ -120,15 +291,11 @@ const Checkout = ({
     return () => clearTimeout(timer);
   }, []);
 
-  // Helper function to get the correct price for rental calculation
+  // Helper functions for pricing calculations
   const getDailyRate = (item) => {
-    // Check for dailyRate first (rental specific)
     if (item.dailyRate) return parseFloat(item.dailyRate);
-    
-    // Fallback to variant price or regular price
     if (item.variant?.price) return parseFloat(item.variant.price);
     if (item.price) return parseFloat(item.price);
-    
     return 0;
   };
 
@@ -147,74 +314,91 @@ const Checkout = ({
     0
   );
   
-  // Delivery fee is 10% of subtotal, free for orders ₱5,000 and above
   const calculateDeliveryFee = () => {
     if (formData.deliveryMethod !== "delivery") return 0;
-    if (subtotal >= 5000) return 0; // Free delivery for orders ₱5,000+
-    return subtotal * 0.10; // 10% of subtotal
+    if (subtotal >= 5000) return 0;
+    return subtotal * 0.10;
   };
   
   const deliveryFee = calculateDeliveryFee();
   const insuranceFee = formData.insurance ? subtotal * 0.15 : 0;
-  const tax = (subtotal + deliveryFee + insuranceFee) * 0.12; // 12% VAT in Philippines
+  const tax = (subtotal + deliveryFee + insuranceFee) * 0.12;
   const total = subtotal + deliveryFee + insuranceFee + tax;
 
-  // PayPal success handler
+  // Enhanced function to update customer profile during checkout
+  const updateCustomerProfile = async (checkoutFormData) => {
+    if (!customerDocId) return;
+
+    try {
+      const customerRef = doc(db, 'customers', customerDocId);
+      const updateData = {
+        firstName: checkoutFormData.firstName.trim(),
+        lastName: checkoutFormData.lastName.trim(),
+        email: checkoutFormData.email.trim(),
+        phone: checkoutFormData.phone.trim(),
+        address: checkoutFormData.address.trim(),
+        apartment: checkoutFormData.apartment?.trim() || '',
+        city: checkoutFormData.city.trim(),
+        state: checkoutFormData.state.trim(),
+        zipCode: checkoutFormData.zipCode.trim(),
+        paypalEmail: checkoutFormData.paypalEmail?.trim() || '',
+        newsletter: checkoutFormData.newsletter,
+        updatedAt: serverTimestamp(),
+        profileCompleted: true,
+        lastCheckoutAt: serverTimestamp()
+      };
+
+      await updateDoc(customerRef, updateData);
+      console.log('Customer profile updated during checkout');
+    } catch (error) {
+      console.error('Error updating customer profile:', error);
+    }
+  };
+
+  // PayPal handlers
   const handlePayPalSuccess = async (paymentDetails) => {
-  console.log('PayPal payment successful - handler called:', paymentDetails);
-  
-  try {
-    // Update payment status immediately
-    setPaymentStatus('completed');
-    setPaypalPaymentDetails(paymentDetails);
+    console.log('PayPal payment successful:', paymentDetails);
     
-    console.log('Payment status updated to completed');
-    
-    // Force a re-render by updating the form data timestamp
-    setFormData(prev => ({ 
-      ...prev, 
-      paymentCompletedAt: new Date().toISOString() 
-    }));
-    
-    // Show success message
-    const message = `✅ Payment successful! 
-    
+    try {
+      setPaymentStatus('completed');
+      setPaypalPaymentDetails(paymentDetails);
+      
+      setFormData(prev => ({ 
+        ...prev, 
+        paymentCompletedAt: new Date().toISOString() 
+      }));
+      
+      const message = `✅ Payment successful! 
+      
 Payment ID: ${paymentDetails.paymentId}
 Amount: ${formatCurrency(paymentDetails.amount)}
 Payer: ${paymentDetails.payerName}
 
 You can now continue to review your rental.`;
-    
-    alert(message);
-    
-    // Optional: Auto-advance to next step after a short delay
-    setTimeout(() => {
-      console.log('Auto-advancing to next step...');
-      setCurrentStep(4); // Go to review step
-    }, 1000);
-    
-  } catch (error) {
-    console.error('Error in PayPal success handler:', error);
-    setPaymentStatus('failed');
-  }
-};
+      
+      alert(message);
+      
+      setTimeout(() => {
+        setCurrentStep(4);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error in PayPal success handler:', error);
+      setPaymentStatus('failed');
+    }
+  };
 
-  // PayPal error handler
   const handlePayPalError = (error) => {
-  console.error('PayPal payment failed:', error);
-  setPaymentStatus('failed');
-  
-  // Clear any previous payment details
-  setPaypalPaymentDetails(null);
-  
-  alert('❌ Payment failed. Please try again or choose cash payment.');
-};
+    console.error('PayPal payment failed:', error);
+    setPaymentStatus('failed');
+    setPaypalPaymentDetails(null);
+    alert('❌ Payment failed. Please try again or choose cash payment.');
+  };
 
-  // Function to generate next checkout ID with enhanced format
+  // Enhanced checkout ID generation
   const generateNextCheckoutId = async () => {
     try {
       return await runTransaction(db, async (transaction) => {
-        // Reference to the counters document
         const counterRef = doc(db, 'counters', 'checkouts');
         const counterDoc = await transaction.get(counterRef);
         
@@ -224,28 +408,25 @@ You can now continue to review your rental.`;
           nextNumber = (counterDoc.data().lastNumber || 0) + 1;
         }
         
-        // Update the counter
         transaction.set(counterRef, { 
           lastNumber: nextNumber,
           updatedAt: serverTimestamp()
         }, { merge: true });
         
-        // Enhanced ID format: RAC (Rent-A-Click) + year + sequential number
-        const currentYear = new Date().getFullYear().toString().slice(-2); // Last 2 digits of year
-        const formattedId = `RAC${currentYear}${nextNumber.toString().padStart(4, '0')}`;
+        const currentYear = new Date().getFullYear().toString().slice(-2);
+        const formattedId = `RACCO${currentYear}${nextNumber.toString().padStart(4, '0')}`;
         
         return formattedId;
       });
     } catch (error) {
       console.error('Error generating checkout ID:', error);
-      // Enhanced fallback with better format
       const timestamp = Date.now().toString().slice(-6);
       const currentYear = new Date().getFullYear().toString().slice(-2);
-      return `RAC${currentYear}${timestamp}`;
+      return `RACCO${currentYear}${timestamp}`;
     }
   };
 
-  // Enhanced saveCheckoutToFirebase function with PayPal details
+  // Enhanced saveCheckoutToFirebase function
   const saveCheckoutToFirebase = async (checkoutId) => {
     try {
       console.log('Saving checkout to Firebase with ID:', checkoutId);
@@ -253,20 +434,23 @@ You can now continue to review your rental.`;
       const checkoutData = {
         // Order identification
         id: checkoutId,
-        orderNumber: checkoutId, // For easier searching
+        orderNumber: checkoutId,
         
-        // User information
-        userId: user?.uid || null,
-        userEmail: user?.email || formData.email,
-        
-        // Customer Information
+        // Customer information - Primary reference to customers collection
+        customerId: customerDocId,
         customerInfo: {
+          customerDocId: customerDocId,
+          firebaseUid: user?.uid,
           firstName: formData.firstName.trim(),
           lastName: formData.lastName.trim(),
           email: formData.email.trim(),
           phone: formData.phone.trim(),
-          fullName: `${formData.firstName.trim()} ${formData.lastName.trim()}`
+          fullName: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
         },
+        
+        // Legacy compatibility (can be removed later)
+        userId: user?.uid || null,
+        userEmail: user?.email || formData.email,
         
         // Rental Details
         rentalDetails: {
@@ -276,7 +460,7 @@ You can now continue to review your rental.`;
           deliveryMethod: formData.deliveryMethod,
         },
         
-        // Delivery Address (if applicable)
+        // Delivery Address
         deliveryAddress: formData.deliveryMethod === 'delivery' ? {
           address: formData.address.trim(),
           apartment: formData.apartment?.trim() || null,
@@ -286,11 +470,10 @@ You can now continue to review your rental.`;
           fullAddress: `${formData.address.trim()}${formData.apartment ? ', ' + formData.apartment.trim() : ''}, ${formData.city.trim()}, ${formData.state.trim()} ${formData.zipCode.trim()}`
         } : null,
         
-        // Enhanced Payment Information with PayPal details
+        // Payment Information with enhanced PayPal details
         paymentInfo: {
           method: formData.paymentMethod,
           paypalEmail: formData.paymentMethod === 'paypal' ? formData.paypalEmail?.trim() : null,
-          // PayPal specific payment details
           paypal: formData.paymentMethod === 'paypal' && paypalPaymentDetails ? {
             orderId: paypalPaymentDetails.paypalOrderId,
             paymentId: paypalPaymentDetails.paymentId,
@@ -305,7 +488,7 @@ You can now continue to review your rental.`;
           } : null
         },
         
-        // Rental Items with detailed information
+        // Rental Items
         items: rentalItems.map(item => ({
           id: item.id,
           name: item.name,
@@ -336,7 +519,7 @@ You can now continue to review your rental.`;
           specialInstructions: formData.specialInstructions?.trim() || null,
         },
         
-        // Update status based on payment method
+        // Status based on payment method
         status: formData.paymentMethod === 'paypal' ? 'confirmed' : 'pending',
         paymentStatus: formData.paymentMethod === 'paypal' ? 'paid' : 'pending',
         
@@ -348,13 +531,17 @@ You can now continue to review your rental.`;
         termsAccepted: formData.termsAccepted,
         termsAcceptedAt: formData.termsAccepted ? serverTimestamp() : null,
         
-        // Additional metadata
+        // Metadata for customers collection
         metadata: {
           source: 'web-checkout',
           userAgent: navigator.userAgent,
           referrer: document.referrer || null,
           itemCount: rentalItems.length,
-          totalQuantity: rentalItems.reduce((sum, item) => sum + (item.quantity || 1), 0)
+          totalQuantity: rentalItems.reduce((sum, item) => sum + (item.quantity || 1), 0),
+          collectionVersion: 'customers-v1',
+          checkoutVersion: '2.0',
+          customerProfileExists: !!customerDocId,
+          autoCreatedProfile: shouldCreateCustomerProfile
         }
       };
       
@@ -369,6 +556,7 @@ You can now continue to review your rental.`;
     }
   };
 
+  // Event handlers
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -376,7 +564,6 @@ You can now continue to review your rental.`;
       [name]: type === "checkbox" ? checked : value,
     }));
     
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -391,7 +578,6 @@ You can now continue to review your rental.`;
       [name]: date,
     }));
     
-    // Clear error when date is selected
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -400,6 +586,7 @@ You can now continue to review your rental.`;
     }
   };
 
+  // Validation
   const validateStep = (step) => {
     const newErrors = {};
 
@@ -469,6 +656,7 @@ You can now continue to review your rental.`;
     return Object.keys(newErrors).length === 0;
   };
 
+  // Navigation handlers
   const handleNext = () => {
     if (validateStep(currentStep) && currentStep < 4) {
       setCurrentStep(currentStep + 1);
@@ -481,11 +669,10 @@ You can now continue to review your rental.`;
     }
   };
 
-  // Modified handleSubmit function with PayPal integration
+  // Enhanced submit handler with customer profile update
   const handleSubmit = async () => {
     if (!validateStep(4)) return;
     
-    // For PayPal payments, ensure payment is completed
     if (formData.paymentMethod === 'paypal' && paymentStatus !== 'completed') {
       alert('Please complete the PayPal payment first.');
       return;
@@ -496,26 +683,29 @@ You can now continue to review your rental.`;
     try {
       console.log('Starting checkout submission...');
       
-      // Generate the next checkout ID
+      // Update customer profile with checkout data
+      await updateCustomerProfile(formData);
+      
+      // Generate the checkout ID
       const checkoutId = await generateNextCheckoutId();
       console.log('Generated checkout ID:', checkoutId);
       
-      // Save to Firebase with payment details
+      // Save to Firebase
       const savedCheckout = await saveCheckoutToFirebase(checkoutId);
       
-      // Clear the cart after successful order
+      // Clear the cart
       try {
         await clearCart();
         console.log('Cart cleared successfully');
       } catch (cartError) {
         console.warn('Failed to clear cart:', cartError);
-        // Don't fail the entire process if cart clearing fails
       }
 
       // Create order object for callback
       const orderDetails = {
         id: checkoutId,
-        userId: user?.uid,
+        customerId: customerDocId,
+        customerData: customerData,
         items: rentalItems,
         formData,
         pricing: { 
@@ -532,10 +722,9 @@ You can now continue to review your rental.`;
         createdAt: new Date().toISOString(),
       };
 
-      // Call the completion callback
       onOrderComplete(orderDetails);
       
-      // Enhanced success message based on payment method
+      // Success message based on payment method
       const successMessage = formData.paymentMethod === 'paypal' 
         ? `🎉 Payment successful! Rental booking confirmed!
 
@@ -555,19 +744,19 @@ Our team will contact you within 24 hours to confirm your rental.`;
 
       alert(successMessage);
       
-      // Redirect to a success page or back to products
+      // Redirect with success state
       navigate('/productsPage', { 
         state: { 
           orderSuccess: true, 
           orderId: checkoutId,
-          paymentMethod: formData.paymentMethod
+          paymentMethod: formData.paymentMethod,
+          customerId: customerDocId
         } 
       });
       
     } catch (error) {
       console.error('Order submission error:', error);
       
-      // More specific error messages
       let errorMessage = "❌ There was an error processing your order. Please try again.";
       
       if (error.message.includes('permission')) {
@@ -578,7 +767,7 @@ Our team will contact you within 24 hours to confirm your rental.`;
         errorMessage = "❌ Failed to save your order. Please try again or contact support.";
       }
       
-      alert('Order processing failed. Please contact support.');
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -590,22 +779,22 @@ Our team will contact you within 24 hours to confirm your rental.`;
     return today;
   };
 
-  // Show loading state while fetching user data
-  if (authLoading) {
+  // Loading states
+  if (authLoading || loadingCustomerData) {
     return <CheckoutLoadingState />;
   }
 
-  // Show error if user is not authenticated
+  // Authentication check
   if (!user) {
     return <CheckoutAuthRequired onGoToSignIn={() => navigate('/')} />;
   }
 
-  // Show empty cart message if no items selected
+  // Empty cart check
   if (rentalItems.length === 0) {
     return <CheckoutEmptyCart onGoToCart={() => navigate('/cartPage')} />;
   }
 
-  // Wrap return JSX with PayPalScriptProvider
+  // Main render with PayPal provider
   return (
     <PayPalScriptProvider options={paypalInitialOptions}>
       <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden">
@@ -616,7 +805,7 @@ Our team will contact you within 24 hours to confirm your rental.`;
           {/* Header */}
           <CheckoutHeader 
             isVisible={isVisible} 
-            userData={userData} 
+            userData={customerData} 
             user={user} 
             rentalItems={rentalItems} 
           />
@@ -626,7 +815,7 @@ Our team will contact you within 24 hours to confirm your rental.`;
 
           {/* Main Content */}
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Form Section with PayPal props */}
+            {/* Form Section */}
             <CheckoutFormSection
               currentStep={currentStep}
               formData={formData}
@@ -642,7 +831,6 @@ Our team will contact you within 24 hours to confirm your rental.`;
               onBack={handleBack}
               onNext={handleNext}
               onSubmit={handleSubmit}
-              // PayPal specific props
               paymentStatus={paymentStatus}
               onPayPalSuccess={handlePayPalSuccess}
               onPayPalError={handlePayPalError}
@@ -672,5 +860,50 @@ Our team will contact you within 24 hours to confirm your rental.`;
     </PayPalScriptProvider>
   );
 };
+
+// Helper components for different states
+const CheckoutAuthRequired = ({ onGoToSignIn }) => (
+  <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden flex items-center justify-center">
+    <Navbar />
+    <div className="text-center py-16">
+      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 max-w-md mx-auto border border-white/20">
+        <h2 className="text-2xl font-bold text-white mb-4">
+          Authentication Required
+        </h2>
+        <p className="text-gray-300 mb-6">
+          Please log in to continue with your rental booking.
+        </p>
+        <button
+          onClick={onGoToSignIn}
+          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-300"
+        >
+          Sign In
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const CheckoutEmptyCart = ({ onGoToCart }) => (
+  <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden flex items-center justify-center">
+    <Navbar />
+    <div className="text-center py-16">
+      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 max-w-md mx-auto border border-white/20">
+        <h2 className="text-2xl font-bold text-white mb-4">
+          No Items Selected
+        </h2>
+        <p className="text-gray-300 mb-6">
+          Please select items from your cart to proceed with checkout.
+        </p>
+        <button
+          onClick={onGoToCart}
+          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-300"
+        >
+          Back to Cart
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 export default Checkout;

@@ -39,7 +39,7 @@ function UseAuthActions({
   const emailCheckTimeoutRef = useRef(null);
   const lastCheckedEmailRef = useRef("");
 
-  // *** NEW: Function to check if user is admin and navigate accordingly ***
+  // *** UPDATED: Function to check if user is admin and navigate accordingly ***
   const checkAdminAndNavigate = async (user, welcomeMessage = null) => {
     try {
       // Check if user document exists in admin collection
@@ -58,8 +58,8 @@ function UseAuthActions({
           navigate('/adminDashboard');
         }, 1500);
       } else {
-        // Regular user - navigate to home page
-        console.log("Regular user:", user.email);
+        // Regular customer - navigate to home page
+        console.log("Regular customer:", user.email);
         
         if (welcomeMessage) {
           showSuccess(welcomeMessage, 4000);
@@ -72,7 +72,7 @@ function UseAuthActions({
     } catch (error) {
       console.error("Error checking admin status:", error);
       // Fallback to regular user navigation if admin check fails
-      showWarning("Unable to verify admin status. Proceeding as regular user.", 4000);
+      showWarning("Unable to verify admin status. Proceeding as regular customer.", 4000);
       
       setTimeout(() => {
         navigate('/homePage');
@@ -99,6 +99,26 @@ function UseAuthActions({
     } catch (error) {
       console.error("Error checking email:", error);
       return { exists: false, methods: [], isGoogleUser: false, isEmailUser: false };
+    }
+  };
+
+  // *** NEW: Function to find customer by Firebase UID ***
+  const findCustomerByFirebaseUid = async (firebaseUid) => {
+    try {
+      // We'll need to query the customers collection to find the document with matching firebaseUid
+      // For now, we'll assume the document ID might be the custom ID
+      // This might require a collection query if we need to search by firebaseUid field
+      const customerRef = doc(firestore, "customers", firebaseUid);
+      const customerSnap = await getDoc(customerRef);
+      
+      if (customerSnap.exists()) {
+        return { id: customerSnap.id, ...customerSnap.data() };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error finding customer:", error);
+      return null;
     }
   };
 
@@ -186,7 +206,7 @@ function UseAuthActions({
     }
   };
 
-  // *** UPDATED: Enhanced Google SSO with sequential ID generation ***
+  // *** UPDATED: Enhanced Google SSO - saves to customers collection with custom ID ***
   const handleGoogleSSO = async () => {
     if (isLoading) return;
     
@@ -202,19 +222,18 @@ function UseAuthActions({
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // Check if user document exists
-      const userRef = doc(firestore, "users", user.uid);
-      const docSnap = await getDoc(userRef);
+      // *** UPDATED: Check if customer document exists using Firebase UID ***
+      let existingCustomer = await findCustomerByFirebaseUid(user.uid);
 
-      if (!docSnap.exists()) {
-        // *** NEW: Generate sequential ID for new Google user ***
-        console.log("Generating sequential ID for new Google user...");
+      if (!existingCustomer) {
+        // *** UPDATED: Generate sequential ID for new Google customer ***
+        console.log("Generating sequential ID for new Google customer...");
         const customId = await getNextAvailableUserId();
         console.log("Generated custom ID:", customId);
         
-        // New Google user
-        const userData = {
-          customId: customId, // *** NEW: Add sequential ID ***
+        // *** UPDATED: Create new customer document with custom ID as document ID ***
+        const customerData = {
+          firebaseUid: user.uid, // Store Firebase UID for reference
           fullName: user.displayName || "",
           email: user.email,
           phoneNumber: user.phoneNumber || "",
@@ -227,29 +246,29 @@ function UseAuthActions({
           profileComplete: false
         };
 
-        await setDoc(userRef, userData);
-        console.log("New Google user profile created:", user.email, "with ID:", customId);
+        // *** KEY CHANGE: Use custom ID as document ID ***
+        const customerRef = doc(firestore, "customers", customId);
+        await setDoc(customerRef, customerData);
+        console.log("New Google customer profile created:", user.email, "with ID:", customId);
         
         // Check admin status and navigate accordingly
         await checkAdminAndNavigate(
           user, 
-          `Welcome ${user.displayName || 'User'}! Your account ID is ${customId}.`
+          `Welcome ${user.displayName || 'User'}! Your customer ID is ${customId}.`
         );
         
       } else {
-        // Existing Google user
-        await setDoc(userRef, { 
+        // *** UPDATED: Update existing customer document ***
+        const customerRef = doc(firestore, "customers", existingCustomer.id);
+        await setDoc(customerRef, { 
           lastLoginAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         }, { merge: true });
         
-        console.log("Existing Google user logged in:", user.email);
+        console.log("Existing Google customer logged in:", user.email);
         
-        // Get the custom ID for display
-        const userData = docSnap.data();
-        const displayMessage = userData.customId 
-          ? `Welcome back ${user.displayName || 'User'}! (ID: ${userData.customId})`
-          : `Welcome back ${user.displayName || 'User'}!`;
+        // Display message with custom ID
+        const displayMessage = `Welcome back ${user.displayName || 'User'}! (ID: ${existingCustomer.id})`;
         
         // Check admin status and navigate accordingly
         await checkAdminAndNavigate(user, displayMessage);
@@ -320,7 +339,7 @@ function UseAuthActions({
     }
   };
 
-  // *** UPDATED: Enhanced form submission with sequential ID generation ***
+  // *** UPDATED: Enhanced form submission - saves to customers collection with custom ID ***
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -366,8 +385,8 @@ function UseAuthActions({
           }
         }
 
-        // *** NEW: Generate sequential ID before creating user ***
-        console.log("Generating sequential ID for new email user...");
+        // *** UPDATED: Generate sequential ID before creating user ***
+        console.log("Generating sequential ID for new email customer...");
         const customId = await getNextAvailableUserId();
         console.log("Generated custom ID:", customId);
 
@@ -379,9 +398,9 @@ function UseAuthActions({
         );
         const user = userCredential.user;
 
-        // *** UPDATED: Create user document with sequential ID ***
-        const userData = {
-          customId: customId, // *** NEW: Add sequential ID ***
+        // *** UPDATED: Create customer document with custom ID as document ID ***
+        const customerData = {
+          firebaseUid: user.uid, // Store Firebase UID for reference
           fullName: formData.fullName?.trim() || "",
           email: formData.email?.toLowerCase()?.trim() || "",
           phoneNumber: formData.phoneNumber?.trim() || "",
@@ -395,20 +414,21 @@ function UseAuthActions({
           agreeToTerms: formData.agreeToTerms || false
         };
 
-        const userRef = doc(firestore, "users", user.uid);
-        await setDoc(userRef, userData);
+        // *** KEY CHANGE: Use custom ID as document ID in customers collection ***
+        const customerRef = doc(firestore, "customers", customId);
+        await setDoc(customerRef, customerData);
 
         // Send email verification
         try {
           await sendEmailVerification(user);
           setEmailVerificationSent(true);
           
-          console.log("Account created:", formData.email, "with ID:", customId);
+          console.log("Customer account created:", formData.email, "with ID:", customId);
           
           // Check admin status and navigate accordingly
           await checkAdminAndNavigate(
             user,
-            `Account created successfully! Your ID is ${customId}. Please check your email (${formData.email}) for verification.`
+            `Account created successfully! Your customer ID is ${customId}. Please check your email (${formData.email}) for verification.`
           );
           
         } catch (verificationError) {
@@ -417,12 +437,12 @@ function UseAuthActions({
           // Still check admin status even if verification fails
           await checkAdminAndNavigate(
             user,
-            `Account created successfully! Your ID is ${customId}. Email verification failed but you can request it later.`
+            `Account created successfully! Your customer ID is ${customId}. Email verification failed but you can request it later.`
           );
         }
 
       } else {
-        // *** UPDATED: Login process with admin navigation ***
+        // *** UPDATED: Login process with customer lookup ***
         
         // Check if this email is a Google-only account before attempting email/password login
         const emailCheck = await checkEmailExists(formData.email.toLowerCase().trim());
@@ -448,27 +468,31 @@ function UseAuthActions({
         );
         const user = userCredential.user;
 
-        // Update last login
-        const userRef = doc(firestore, "users", user.uid);
-        await setDoc(userRef, { 
-          lastLoginAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-
-        // Get user data to display custom ID
-        const userDoc = await getDoc(userRef);
-        const userData = userDoc.exists() ? userDoc.data() : null;
-
-        setLoginAttempts(0);
-        console.log("User logged in:", formData.email);
+        // *** UPDATED: Find and update customer document ***
+        const existingCustomer = await findCustomerByFirebaseUid(user.uid);
         
-        // Display welcome message with custom ID if available
-        const displayMessage = userData?.customId 
-          ? `Welcome back!`
-          : "Welcome back! You've been logged in successfully.";
-        
-        // Check admin status and navigate accordingly
-        await checkAdminAndNavigate(user, displayMessage);
+        if (existingCustomer) {
+          // Update last login in customer document
+          const customerRef = doc(firestore, "customers", existingCustomer.id);
+          await setDoc(customerRef, { 
+            lastLoginAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          setLoginAttempts(0);
+          console.log("Customer logged in:", formData.email);
+          
+          // Display welcome message with customer ID
+          const displayMessage = `Welcome back! (Customer ID: ${existingCustomer.id})`;
+          
+          // Check admin status and navigate accordingly
+          await checkAdminAndNavigate(user, displayMessage);
+        } else {
+          // Customer document not found - this shouldn't happen for existing users
+          showError("Customer profile not found. Please contact support.", 6000);
+          setIsLoading(false);
+          return;
+        }
       }
 
       // Reset form on success
@@ -489,9 +513,9 @@ function UseAuthActions({
       let errorMessage = "An error occurred. Please try again.";
       let toastDuration = 5000;
 
-      // *** NEW: Handle sequential ID generation errors ***
+      // *** UPDATED: Handle sequential ID generation errors ***
       if (error.message && error.message.includes("Failed to generate unique user ID")) {
-        errorMessage = "Unable to generate user ID. Please try again in a moment.";
+        errorMessage = "Unable to generate customer ID. Please try again in a moment.";
         showError(errorMessage, 6000);
         setErrors({ submit: errorMessage });
         setIsLoading(false);

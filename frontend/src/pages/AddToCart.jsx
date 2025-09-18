@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../firebase';
@@ -16,31 +16,56 @@ const AddToCart = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const [customerDocId, setCustomerDocId] = useState(null);
+
+  // Find customer document by firebaseUid
+  const findCustomerDoc = async (firebaseUid) => {
+    try {
+      const customersRef = collection(firestore, 'customers');
+      const q = query(customersRef, where('firebaseUid', '==', firebaseUid));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const customerDoc = querySnapshot.docs[0];
+        return {
+          id: customerDoc.id,
+          data: customerDoc.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error finding customer document:', error);
+      return null;
+    }
+  };
 
   // Fetch cart items from Firebase
   useEffect(() => {
     const fetchCartItems = async () => {
       if (!user) {
         setCartItems([]);
+        setCustomerDocId(null);
         setIsLoading(false);
         return;
       }
 
       try {
         setIsLoading(true);
-        const userRef = doc(firestore, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
+        const customerDoc = await findCustomerDoc(user.uid);
         
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          const cart = userData.cart || [];
+        if (customerDoc) {
+          setCustomerDocId(customerDoc.id);
+          const cart = customerDoc.data.cart || [];
           setCartItems(cart);
         } else {
+          console.warn('Customer document not found for user:', user.uid);
           setCartItems([]);
+          setCustomerDocId(null);
         }
       } catch (error) {
         console.error('Error fetching cart items:', error);
         setCartItems([]);
+        setCustomerDocId(null);
       } finally {
         setIsLoading(false);
       }
@@ -53,11 +78,11 @@ const AddToCart = () => {
 
   // Update cart items in Firebase and local state
   const updateCartItems = async (updatedItems) => {
-    if (!user) return;
+    if (!user || !customerDocId) return;
 
     try {
-      const userRef = doc(firestore, 'users', user.uid);
-      await updateDoc(userRef, {
+      const customerRef = doc(firestore, 'customers', customerDocId);
+      await updateDoc(customerRef, {
         cart: updatedItems,
         lastUpdated: new Date().toISOString()
       });
@@ -155,7 +180,8 @@ const AddToCart = () => {
         selectedItems: selectedCartItems,
         totalQuantity: totalQuantity,
         totalAmount: totalAmount,
-        userId: user.uid,
+        userId: user.uid, // Keep this as userId for compatibility with checkout
+        customerId: customerDocId, // Add customer document ID
         timestamp: new Date().toISOString()
       }
     });
@@ -210,6 +236,29 @@ const AddToCart = () => {
                 </h2>
                 <p className="text-gray-300">
                   You need to be logged in to access your cart items.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if customer document not found
+  if (!customerDocId && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <Navbar />
+        <div className="pt-12 pb-6 px-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center py-16">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 max-w-md mx-auto border border-white/20">
+                <h2 className="text-2xl font-bold text-white mb-4">
+                  Customer Profile Not Found
+                </h2>
+                <p className="text-gray-300">
+                  Unable to load your cart. Please contact support if this issue persists.
                 </p>
               </div>
             </div>
