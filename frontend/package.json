@@ -10,16 +10,23 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@cloudinary/react": "^1.14.3",
+    "@cloudinary/url-gen": "^1.22.0",
+    "@hookform/resolvers": "^5.2.2",
     "@paypal/react-paypal-js": "^8.9.1",
     "@tailwindcss/vite": "^4.1.11",
+    "date-fns": "^4.1.0",
     "firebase": "^12.1.0",
-    "lucide-react": "0.541.0",
+    "lucide-react": "^0.541.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-firebase-hooks": "^5.1.1",
     "react-google-recaptcha": "^3.1.0",
+    "react-hook-form": "^7.63.0",
+    "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.8.0",
-    "recharts": "^3.2.0"
+    "recharts": "^3.2.0",
+    "yup": "^1.7.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

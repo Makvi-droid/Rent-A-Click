@@ -1,4 +1,4 @@
-// hooks/useAuthActions.js
+// hooks/UseAuthActions.js
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -9,11 +9,11 @@ import {
   sendEmailVerification,
   fetchSignInMethodsForEmail
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+
 import { auth, firestore } from "../firebase";
 import { useToast } from "../components/Authentication/Toast";
-// Import the sequential ID generator
-import { getNextAvailableUserId } from "../utils/generateSequentialUserId";
+import { getNextAvailableCustomerId } from "../utils/generateSequentialCustomerId";
+import { doc, setDoc, getDoc, serverTimestamp, query, collection, where, getDocs } from "firebase/firestore";
 
 function UseAuthActions({
   formData,
@@ -39,54 +39,36 @@ function UseAuthActions({
   const emailCheckTimeoutRef = useRef(null);
   const lastCheckedEmailRef = useRef("");
 
-  // *** UPDATED: Function to check if user is admin and navigate accordingly ***
-  const checkAdminAndNavigate = async (user, welcomeMessage = null) => {
+  // Check if user is admin and navigate accordingly
+  const checkAdminAndNavigate = async (user, welcomeMessage = null, isNewUser = false) => {
     try {
-      // Check if user document exists in admin collection
       const adminRef = doc(firestore, "admin", user.uid);
       const adminSnap = await getDoc(adminRef);
       
       if (adminSnap.exists()) {
-        // User is admin - navigate to admin dashboard
         console.log("Admin user detected:", user.email);
-        
         if (welcomeMessage) {
-          showSuccess(welcomeMessage + " (Admin Access)", 4000);
+          const adminMessage = isNewUser 
+            ? `${welcomeMessage} (Admin Access)` 
+            : `${welcomeMessage} (Admin Access)`;
+          showSuccess(adminMessage, 4000);
         }
-        
-        setTimeout(() => {
-          navigate('/adminDashboard');
-        }, 1500);
+        setTimeout(() => navigate('/adminDashboard'), 1500);
       } else {
-        // Regular customer - navigate to home page
         console.log("Regular customer:", user.email);
-        
         if (welcomeMessage) {
           showSuccess(welcomeMessage, 4000);
         }
-        
-        setTimeout(() => {
-          navigate('/homePage');
-        }, 1500);
+        setTimeout(() => navigate('/homePage'), 1500);
       }
     } catch (error) {
       console.error("Error checking admin status:", error);
-      // Fallback to regular user navigation if admin check fails
       showWarning("Unable to verify admin status. Proceeding as regular customer.", 4000);
-      
-      setTimeout(() => {
-        navigate('/homePage');
-      }, 1500);
+      setTimeout(() => navigate('/homePage'), 1500);
     }
   };
 
-  // Improved email completion check
-  const isEmailLikelyComplete = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    return emailRegex.test(email) && email.length >= 8;
-  };
-
-  // Check if email is already registered
+  // Check if email is already registered in Firebase Auth
   const checkEmailExists = async (email) => {
     try {
       const signInMethods = await fetchSignInMethodsForEmail(auth, email);
@@ -102,19 +84,23 @@ function UseAuthActions({
     }
   };
 
-  // *** NEW: Function to find customer by Firebase UID ***
+  // Find existing customer by Firebase UID (primary method)
   const findCustomerByFirebaseUid = async (firebaseUid) => {
     try {
-      // We'll need to query the customers collection to find the document with matching firebaseUid
-      // For now, we'll assume the document ID might be the custom ID
-      // This might require a collection query if we need to search by firebaseUid field
-      const customerRef = doc(firestore, "customers", firebaseUid);
-      const customerSnap = await getDoc(customerRef);
+      console.log("Searching for customer with Firebase UID:", firebaseUid);
       
-      if (customerSnap.exists()) {
-        return { id: customerSnap.id, ...customerSnap.data() };
+      const customersRef = collection(firestore, "customers");
+      const q = query(customersRef, where("firebaseUid", "==", firebaseUid));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const customerDoc = querySnapshot.docs[0];
+        const customerData = { id: customerDoc.id, ...customerDoc.data() };
+        console.log("Found existing customer:", customerDoc.id);
+        return customerData;
       }
       
+      console.log("No customer found with Firebase UID");
       return null;
     } catch (error) {
       console.error("Error finding customer:", error);
@@ -122,7 +108,58 @@ function UseAuthActions({
     }
   };
 
-  // Debounced email validation function
+  // Create new customer document
+  const createCustomerDocument = async (user, additionalData = {}) => {
+    try {
+      const customId = await getNextAvailableCustomerId();
+      console.log("Generated custom customer ID:", customId);
+
+      const customerData = {
+        firebaseUid: user.uid,
+        fullName: additionalData.fullName || user.displayName || "",
+        email: user.email.toLowerCase(),
+        phoneNumber: additionalData.phoneNumber || user.phoneNumber || "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        provider: additionalData.provider || "email",
+        role: "customer",
+        twoFA: false,
+        isEmailVerified: user.emailVerified || false,
+        profileComplete: Boolean(additionalData.fullName),
+        agreeToTerms: additionalData.agreeToTerms || false
+      };
+
+      const customerRef = doc(firestore, "customers", customId);
+      await setDoc(customerRef, customerData);
+      
+      console.log("Created new customer document:", customId);
+      return { id: customId, ...customerData };
+    } catch (error) {
+      console.error("Error creating customer document:", error);
+      throw new Error("Failed to create customer profile");
+    }
+  };
+
+  // Update customer last login
+  const updateCustomerLogin = async (customerId) => {
+    try {
+      const customerRef = doc(firestore, "customers", customerId);
+      await setDoc(customerRef, { 
+        lastLoginAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (error) {
+      console.error("Error updating customer login:", error);
+    }
+  };
+
+  // Improved email validation
+  const isEmailLikelyComplete = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    return emailRegex.test(email) && email.length >= 8;
+  };
+
+  // Debounced email validation
   const debouncedEmailCheck = useCallback(async (email) => {
     if (email === lastCheckedEmailRef.current) return;
     
@@ -158,23 +195,21 @@ function UseAuthActions({
     }
   }, [formData.email, setErrors, isSignUp]);
 
-  // Input handling with improved debounced validation
+  // Input handling
   const handleInputChange = async (e) => {
     const { name, value, type, checked } = e.target;
     const inputValue = type === "checkbox" ? checked : value;
 
     setFormData((prev) => ({ ...prev, [name]: inputValue }));
 
-    // Clear errors for this field immediately
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
-    // Debounced email validation for both login and signup
+    // Debounced email validation
     if (name === "email") {
       const trimmedEmail = value.toLowerCase().trim();
       
-      // Clear previous timeout
       if (emailCheckTimeoutRef.current) {
         clearTimeout(emailCheckTimeoutRef.current);
       }
@@ -206,7 +241,7 @@ function UseAuthActions({
     }
   };
 
-  // *** UPDATED: Enhanced Google SSO - saves to customers collection with custom ID ***
+  // Google SSO - FIXED to prevent duplicates
   const handleGoogleSSO = async () => {
     if (isLoading) return;
     
@@ -222,56 +257,27 @@ function UseAuthActions({
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // *** UPDATED: Check if customer document exists using Firebase UID ***
+      console.log("Google SSO - User authenticated:", user.email);
+
+      // Check if customer already exists
       let existingCustomer = await findCustomerByFirebaseUid(user.uid);
 
       if (!existingCustomer) {
-        // *** UPDATED: Generate sequential ID for new Google customer ***
-        console.log("Generating sequential ID for new Google customer...");
-        const customId = await getNextAvailableUserId();
-        console.log("Generated custom ID:", customId);
+        // Create new customer
+        console.log("Creating new Google customer...");
+        existingCustomer = await createCustomerDocument(user, { 
+          provider: "google" 
+        });
         
-        // *** UPDATED: Create new customer document with custom ID as document ID ***
-        const customerData = {
-          firebaseUid: user.uid, // Store Firebase UID for reference
-          fullName: user.displayName || "",
-          email: user.email,
-          phoneNumber: user.phoneNumber || "",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          provider: "google",
-          role: "customer",
-          twoFA: false,
-          isEmailVerified: user.emailVerified || false,
-          profileComplete: false
-        };
-
-        // *** KEY CHANGE: Use custom ID as document ID ***
-        const customerRef = doc(firestore, "customers", customId);
-        await setDoc(customerRef, customerData);
-        console.log("New Google customer profile created:", user.email, "with ID:", customId);
-        
-        // Check admin status and navigate accordingly
-        await checkAdminAndNavigate(
-          user, 
-          `Welcome ${user.displayName || 'User'}! Your customer ID is ${customId}.`
-        );
-        
+        const welcomeMessage = `Welcome ${user.displayName || 'User'}! Your customer ID is ${existingCustomer.id}.`;
+        await checkAdminAndNavigate(user, welcomeMessage, true);
       } else {
-        // *** UPDATED: Update existing customer document ***
-        const customerRef = doc(firestore, "customers", existingCustomer.id);
-        await setDoc(customerRef, { 
-          lastLoginAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }, { merge: true });
+        // Update existing customer login
+        console.log("Existing Google customer found:", existingCustomer.id);
+        await updateCustomerLogin(existingCustomer.id);
         
-        console.log("Existing Google customer logged in:", user.email);
-        
-        // Display message with custom ID
-        const displayMessage = `Welcome back ${user.displayName || 'User'}! (ID: ${existingCustomer.id})`;
-        
-        // Check admin status and navigate accordingly
-        await checkAdminAndNavigate(user, displayMessage);
+        const welcomeBackMessage = `Welcome back ${user.displayName || 'User'}!`;
+        await checkAdminAndNavigate(user, welcomeBackMessage, false);
       }
 
     } catch (error) {
@@ -330,7 +336,7 @@ function UseAuthActions({
     }, 1000);
   };
 
-  // Handle existing email confirmation for sign up
+  // Handle existing email confirmation
   const handleExistingEmailConfirmation = () => {
     setShowConfirmModal(false);
     if (pendingEmailData) {
@@ -339,18 +345,16 @@ function UseAuthActions({
     }
   };
 
-  // *** UPDATED: Enhanced form submission - saves to customers collection with custom ID ***
+  // Main form submission - COMPLETELY REWRITTEN to prevent duplicates
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (isLoading) return;
     
-    // Clear any pending email validation timeouts
     if (emailCheckTimeoutRef.current) {
       clearTimeout(emailCheckTimeoutRef.current);
     }
     
-    // Validate form
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -363,7 +367,7 @@ function UseAuthActions({
 
     try {
       if (isSignUp) {
-        // Final check if email exists before attempting registration
+        // *** SIGN UP PROCESS ***
         const emailCheck = await checkEmailExists(formData.email.toLowerCase().trim());
         
         if (emailCheck.exists) {
@@ -385,12 +389,9 @@ function UseAuthActions({
           }
         }
 
-        // *** UPDATED: Generate sequential ID before creating user ***
-        console.log("Generating sequential ID for new email customer...");
-        const customId = await getNextAvailableUserId();
-        console.log("Generated custom ID:", customId);
+        console.log("Creating new email/password user...");
 
-        // Proceed with email/password registration
+        // Create Firebase auth user
         const userCredential = await createUserWithEmailAndPassword(
           auth,
           formData.email.toLowerCase().trim(),
@@ -398,57 +399,46 @@ function UseAuthActions({
         );
         const user = userCredential.user;
 
-        // *** UPDATED: Create customer document with custom ID as document ID ***
-        const customerData = {
-          firebaseUid: user.uid, // Store Firebase UID for reference
-          fullName: formData.fullName?.trim() || "",
-          email: formData.email?.toLowerCase()?.trim() || "",
-          phoneNumber: formData.phoneNumber?.trim() || "",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          role: "customer",
-          provider: "email",
-          twoFA: false,
-          isEmailVerified: false,
-          profileComplete: true,
-          agreeToTerms: formData.agreeToTerms || false
-        };
+        // Check one more time if customer exists (race condition protection)
+        let existingCustomer = await findCustomerByFirebaseUid(user.uid);
+        
+        if (existingCustomer) {
+          console.log("Customer already exists! Using existing customer:", existingCustomer.id);
+          await updateCustomerLogin(existingCustomer.id);
+          
+          const welcomeBackMessage = `Welcome back ${existingCustomer.fullName || 'User'}! (Customer ID: ${existingCustomer.id})`;
+          await checkAdminAndNavigate(user, welcomeBackMessage, false);
+        } else {
+          // Safe to create new customer
+          const newCustomer = await createCustomerDocument(user, {
+            fullName: formData.fullName?.trim() || "",
+            phoneNumber: formData.phoneNumber?.trim() || "",
+            agreeToTerms: formData.agreeToTerms || false,
+            provider: "email"
+          });
 
-        // *** KEY CHANGE: Use custom ID as document ID in customers collection ***
-        const customerRef = doc(firestore, "customers", customId);
-        await setDoc(customerRef, customerData);
-
-        // Send email verification
-        try {
-          await sendEmailVerification(user);
-          setEmailVerificationSent(true);
-          
-          console.log("Customer account created:", formData.email, "with ID:", customId);
-          
-          // Check admin status and navigate accordingly
-          await checkAdminAndNavigate(
-            user,
-            `Account created successfully! Your customer ID is ${customId}. Please check your email (${formData.email}) for verification.`
-          );
-          
-        } catch (verificationError) {
-          console.warn("Email verification failed:", verificationError.message);
-          
-          // Still check admin status even if verification fails
-          await checkAdminAndNavigate(
-            user,
-            `Account created successfully! Your customer ID is ${customId}. Email verification failed but you can request it later.`
-          );
+          try {
+            await sendEmailVerification(user);
+            setEmailVerificationSent(true);
+            
+            console.log("New email customer created:", newCustomer.id);
+            
+            const welcomeMessage = `Welcome ${formData.fullName || 'User'}! Your customer ID is ${newCustomer.id}. Please check your email for verification.`;
+            await checkAdminAndNavigate(user, welcomeMessage, true);
+            
+          } catch (verificationError) {
+            console.warn("Email verification failed:", verificationError.message);
+            
+            const welcomeMessage = `Welcome ${formData.fullName || 'User'}! Your customer ID is ${newCustomer.id}. Email verification failed but you can request it later.`;
+            await checkAdminAndNavigate(user, welcomeMessage, true);
+          }
         }
 
       } else {
-        // *** UPDATED: Login process with customer lookup ***
-        
-        // Check if this email is a Google-only account before attempting email/password login
+        // *** SIGN IN PROCESS ***
         const emailCheck = await checkEmailExists(formData.email.toLowerCase().trim());
         
         if (emailCheck.exists && emailCheck.isGoogleUser && !emailCheck.isEmailUser) {
-          // This is a Google-only account, prevent email/password login
           showWarning(
             "This email was registered with Google. Please use 'Continue with Google' to sign in.",
             7000
@@ -460,7 +450,6 @@ function UseAuthActions({
           return;
         }
 
-        // Proceed with email/password login (for email-registered accounts)
         const userCredential = await signInWithEmailAndPassword(
           auth, 
           formData.email.toLowerCase().trim(), 
@@ -468,27 +457,17 @@ function UseAuthActions({
         );
         const user = userCredential.user;
 
-        // *** UPDATED: Find and update customer document ***
+        // Find existing customer
         const existingCustomer = await findCustomerByFirebaseUid(user.uid);
         
         if (existingCustomer) {
-          // Update last login in customer document
-          const customerRef = doc(firestore, "customers", existingCustomer.id);
-          await setDoc(customerRef, { 
-            lastLoginAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-
+          await updateCustomerLogin(existingCustomer.id);
           setLoginAttempts(0);
-          console.log("Customer logged in:", formData.email);
+          console.log("Customer signed in:", existingCustomer.id);
           
-          // Display welcome message with customer ID
-          const displayMessage = `Welcome back! (Customer ID: ${existingCustomer.id})`;
-          
-          // Check admin status and navigate accordingly
-          await checkAdminAndNavigate(user, displayMessage);
+          const welcomeBackMessage = `Welcome back ${existingCustomer.fullName || 'User'}! (Customer ID: ${existingCustomer.id})`;
+          await checkAdminAndNavigate(user, welcomeBackMessage, false);
         } else {
-          // Customer document not found - this shouldn't happen for existing users
           showError("Customer profile not found. Please contact support.", 6000);
           setIsLoading(false);
           return;
@@ -513,9 +492,8 @@ function UseAuthActions({
       let errorMessage = "An error occurred. Please try again.";
       let toastDuration = 5000;
 
-      // *** UPDATED: Handle sequential ID generation errors ***
-      if (error.message && error.message.includes("Failed to generate unique user ID")) {
-        errorMessage = "Unable to generate customer ID. Please try again in a moment.";
+      if (error.message && error.message.includes("Failed to")) {
+        errorMessage = error.message;
         showError(errorMessage, 6000);
         setErrors({ submit: errorMessage });
         setIsLoading(false);
@@ -565,7 +543,6 @@ function UseAuthActions({
           showError(errorMessage, toastDuration);
       }
 
-      // Handle login attempt tracking
       if (!isSignUp) {
         const newAttempts = loginAttempts + 1;
         setLoginAttempts(newAttempts);
@@ -594,7 +571,7 @@ function UseAuthActions({
     }
   };
 
-  // Cleanup timeout on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       if (emailCheckTimeoutRef.current) {

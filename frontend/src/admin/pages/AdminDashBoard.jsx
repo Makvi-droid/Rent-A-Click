@@ -1,54 +1,54 @@
 // Main Dashboard Component
 
-import React, { useState } from 'react';
-import Dashboard from './Dashboard';
-import ProductManagement from '../../components/admin/ProductManagement';
-import ComingSoon from '../../components/admin/ComingSoon';
-import Sidebar from '../../components/admin/Sidebar';
-import Header from '../../components/admin/Header';
-import Inventory from './Inventory'
-import OrderManagement from './OrderManagement';
-import UserManagement from './UserManagement';
+import React, { useState } from "react";
+import Dashboard from "./Dashboard";
+import ProductManagement from "../../components/admin/ProductManagement";
+import ComingSoon from "../../components/admin/ComingSoon";
+import Sidebar from "../../components/admin/Sidebar";
+import Header from "../../components/admin/Header";
+import Inventory from "./Inventory";
+import OrderManagement from "./OrderManagement";
+import EmployeeManagement from "./EmployeeManagement";
 
 const AdminDashboard = () => {
-
   const mockUser = {
-  name: "John Admin",
-  email: "john@rentaclick.com",
-  role: "admin",
-  avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&h=256&q=80"
-};
+    name: "John Admin",
+    email: "john@rentaclick.com",
+    role: "admin",
+    avatar:
+      "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&h=256&q=80",
+  };
 
   const mockStats = {
-  totalRevenue: 45230,
-  totalOrders: 156,
-  totalProducts: 87,
-  totalUsers: 1249,
-  lowStockItems: 12,
-  pendingOrders: 23
-};
+    totalRevenue: 45230,
+    totalOrders: 156,
+    totalProducts: 87,
+    totalUsers: 1249,
+    lowStockItems: 12,
+    pendingOrders: 23,
+  };
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState("dashboard");
   const [user] = useState(mockUser);
 
   const renderContent = () => {
     switch (activeSection) {
-      case 'dashboard':
-        return <Dashboard/>;
-      case 'products':
+      case "dashboard":
+        return <Dashboard />;
+      case "products":
         return <ProductManagement />;
-      case 'orders':
-        return <OrderManagement/>;
-      case 'inventory':
-        return <Inventory/>
-      case 'users':
-        return <UserManagement/>;
-      case 'analytics':
+      case "orders":
+        return <OrderManagement />;
+      case "inventory":
+        return <Inventory />;
+      case "Employees":
+        return <EmployeeManagement />;
+      case "analytics":
         return <ComingSoon title="Analytics & Reports" />;
-      case 'settings':
+      case "settings":
         return <ComingSoon title="Settings" />;
-      case 'notifications':
+      case "notifications":
         return <ComingSoon title="Notifications" />;
       default:
         return <Dashboard stats={mockStats} />;
@@ -57,21 +57,19 @@ const AdminDashboard = () => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar 
-        isOpen={sidebarOpen} 
+      <Sidebar
+        isOpen={sidebarOpen}
         setIsOpen={setSidebarOpen}
         activeSection={activeSection}
         setActiveSection={setActiveSection}
         userRole={user.role}
       />
-      
+
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header setIsOpen={setSidebarOpen} user={user} />
-        
+
         <main className="flex-1 overflow-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            {renderContent()}
-          </div>
+          <div className="max-w-7xl mx-auto">{renderContent()}</div>
         </main>
       </div>
     </div>

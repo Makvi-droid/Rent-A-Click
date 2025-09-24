@@ -1,4 +1,4 @@
-// CheckoutFormSection.jsx
+// FIXED: CheckoutFormSection.jsx
 import React from "react";
 import RentalDetailsStep from "./RentalDetailsStep";
 import CustomerInfoStep from "./CustomerInfoStep";
@@ -26,7 +26,10 @@ const CheckoutFormSection = ({
   onPayPalSuccess,
   onPayPalError,
   PayPalPaymentButton,
-  rentalItems
+  rentalItems,
+  // FIXED: Props for camera rental and ID submission
+  hasCameraRental = false,
+  onGoogleFormSubmission
 }) => {
   const renderCurrentStep = () => {
     switch (currentStep) {
@@ -41,6 +44,9 @@ const CheckoutFormSection = ({
             onDateChange={onDateChange}
             onInputChange={onInputChange}
             getTodayDate={getTodayDate}
+            // FIXED: Pass camera rental props
+            hasCameraRental={hasCameraRental}
+            onGoogleFormSubmission={onGoogleFormSubmission}
           />
         );
       case 2:
@@ -75,6 +81,10 @@ const CheckoutFormSection = ({
             rentalDays={rentalDays}
             onInputChange={onInputChange}
             paymentStatus={paymentStatus}
+            // FIXED: Pass additional props for review
+            hasCameraRental={hasCameraRental}
+            rentalItems={rentalItems}
+            formatCurrency={formatCurrency}
           />
         );
       default:
@@ -95,10 +105,12 @@ const CheckoutFormSection = ({
           onSubmit={onSubmit}
           formData={formData}
           paymentStatus={paymentStatus}
+          // FIXED: Pass camera rental validation
+          hasCameraRental={hasCameraRental}
         />
       </div>
     </div>
   );
 };
 
-export default CheckoutFormSection
+export default CheckoutFormSection;

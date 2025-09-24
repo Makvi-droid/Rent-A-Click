@@ -1,21 +1,27 @@
 // CheckoutAuthRequired.jsx
-import React from "react";
-import { AlertCircle } from "lucide-react";
+import React from 'react';
+import Navbar from "../Navbar";
 
 const CheckoutAuthRequired = ({ onGoToSignIn }) => (
-  <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black flex items-center justify-center">
-    <div className="text-center max-w-md mx-auto px-6">
-      <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-      <h2 className="text-2xl font-bold text-white mb-4">Authentication Required</h2>
-      <p className="text-gray-400 mb-6">Please sign in to access the checkout page.</p>
-      <button
-        onClick={onGoToSignIn}
-        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-200"
-      >
-        Go to Sign In
-      </button>
+  <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden flex items-center justify-center">
+    <Navbar />
+    <div className="text-center py-16">
+      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 max-w-md mx-auto border border-white/20">
+        <h2 className="text-2xl font-bold text-white mb-4">
+          Authentication Required
+        </h2>
+        <p className="text-gray-300 mb-6">
+          Please log in to continue with your rental booking.
+        </p>
+        <button
+          onClick={onGoToSignIn}
+          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-300"
+        >
+          Sign In
+        </button>
+      </div>
     </div>
   </div>
 );
 
-export default CheckoutAuthRequired
+export default CheckoutAuthRequired;

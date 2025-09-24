@@ -1,4 +1,4 @@
-// OrdersTable.jsx - FIXED DATE HANDLING
+// OrdersTable.jsx - Enhanced with item display, physical ID verification, and fixed penalty
 import React, { useState } from 'react';
 import { 
   Eye, 
@@ -11,7 +11,19 @@ import {
   User,
   CreditCard,
   MapPin,
-  Package
+  Package,
+  Shield,
+  ShieldCheck,
+  ShieldX,
+  Image,
+  CheckCircle2,
+  AlertTriangle,
+  RotateCcw,
+  Clock,
+  FileImage,
+  ChevronDown,
+  ChevronUp,
+  ShieldAlert
 } from 'lucide-react';
 
 const OrdersTable = ({
@@ -23,21 +35,109 @@ const OrdersTable = ({
   onViewDetails,
   onUpdateStatus,
   onUpdatePaymentStatus,
+  onUpdateReturnStatus,
+  onUpdatePhysicalIdStatus, // NEW
   onDeleteOrder,
   formatCurrency,
-  formatDate // NOW USING THE ENHANCED formatDate FROM PARENT
+  formatDate,
+  latePenaltyAmount = 150 // NEW: Fixed penalty amount
 }) => {
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [actionMenuOpen, setActionMenuOpen] = useState(null);
 
-  const toggleRowExpansion = (orderId) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(orderId)) {
-      newExpanded.delete(orderId);
-    } else {
-      newExpanded.add(orderId);
+  // Safe date formatting function - moved to component level
+  const safeFormatDate = (date, options = {}) => {
+    // Use the passed formatDate function if available
+    if (formatDate && typeof formatDate === 'function') {
+      return formatDate(date, options);
     }
-    setExpandedRows(newExpanded);
+    
+    if (!date) return 'N/A';
+    
+    try {
+      let validDate;
+      
+      if (date instanceof Date) {
+        validDate = date;
+      } else if (typeof date === 'object' && date !== null) {
+        if (date.seconds !== undefined) {
+          validDate = new Date(date.seconds * 1000 + (date.nanoseconds || 0) / 1000000);
+        } else if (typeof date.toDate === 'function') {
+          validDate = date.toDate();
+        } else {
+          console.warn('Unknown date object:', date);
+          return 'Invalid Date';
+        }
+      } else {
+        validDate = new Date(date);
+      }
+      
+      if (!validDate || isNaN(validDate.getTime())) {
+        console.warn('Invalid date:', date);
+        return 'Invalid Date';
+      }
+      
+      const defaultOptions = {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Manila'
+      };
+      
+      return new Intl.DateTimeFormat('en-US', { ...defaultOptions, ...options }).format(validDate);
+    } catch (error) {
+      console.error('Error formatting date:', error, date);
+      return 'Date Error';
+    }
+  };
+
+  const formatRentalDate = (date) => {
+    if (!date) return 'N/A';
+    
+    // Use the passed formatDate function if available
+    if (formatDate && typeof formatDate === 'function') {
+      return formatDate(date, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    
+    try {
+      const validDate = new Date(date);
+      if (isNaN(validDate.getTime())) {
+        if (typeof date === 'string' && (date.includes('/') || date.includes('-'))) {
+          return date;
+        }
+        return 'Invalid Date';
+      }
+      return validDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting rental date:', error);
+      return 'Date Error';
+    }
+  };
+
+  // Check if return is overdue
+  const isReturnOverdue = (order) => {
+    if (order.itemReturned) return false;
+    
+    const returnDate = new Date(order.rentalDetails?.endDate);
+    const returnTime = order.rentalDetails?.returnTime;
+    
+    if (returnTime) {
+      const [hours, minutes] = returnTime.split(':');
+      returnDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    }
+    
+    return new Date() > returnDate;
+  };
+
+  // Calculate penalty
+  const calculatePenalty = (order) => {
+    return isReturnOverdue(order) && !order.itemReturned ? latePenaltyAmount : 0;
   };
 
   const getStatusBadge = (status) => {
@@ -74,93 +174,102 @@ const OrdersTable = ({
     );
   };
 
-  // ENHANCED DATE FORMATTING - Use parent's formatDate or create fallback
-  const safeFormatDate = (date, options = {}) => {
-    // If formatDate prop is provided, use it (enhanced version from parent)
-    if (formatDate && typeof formatDate === 'function') {
-      return formatDate(date, options);
-    }
+  // ENHANCED: ID Verification Badge with Physical Verification
+  const getIdVerificationBadge = (order) => {
+  if (order.physicalIdShown) {
+    return (
+      <div className="flex items-center space-x-1" title="Physical ID Shown">
+        <ShieldCheck className="w-4 h-4 text-green-400" />
+      </div>
+    );
+  } else {
+    return (
+      <div className="flex items-center space-x-1" title="Physical ID Not Shown">
+        <ShieldX className="w-4 h-4 text-gray-400" />
+      </div>
+    );
+  }
+};
+
+  // Return Status Badge
+  const getReturnStatusBadge = (order) => {
+    const isOverdue = isReturnOverdue(order);
     
-    // Fallback formatting if parent doesn't provide formatDate
-    if (!date) return 'N/A';
-    
-    try {
-      let validDate;
-      
-      // Handle different date formats
-      if (date instanceof Date) {
-        validDate = date;
-      } else if (typeof date === 'object' && date !== null) {
-        // Handle Firestore Timestamp
-        if (date.seconds !== undefined) {
-          validDate = new Date(date.seconds * 1000 + (date.nanoseconds || 0) / 1000000);
-        } else if (typeof date.toDate === 'function') {
-          validDate = date.toDate();
-        } else {
-          console.warn('Unknown date object:', date);
-          return 'Invalid Date';
-        }
-      } else {
-        validDate = new Date(date);
-      }
-      
-      // Check if date is valid
-      if (!validDate || isNaN(validDate.getTime())) {
-        console.warn('Invalid date:', date);
-        return 'Invalid Date';
-      }
-      
-      const defaultOptions = {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Asia/Manila'
-      };
-      
-      return new Intl.DateTimeFormat('en-US', { ...defaultOptions, ...options }).format(validDate);
-    } catch (error) {
-      console.error('Error formatting date:', error, date);
-      return 'Date Error';
+    if (order.itemReturned) {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border bg-green-500/20 text-green-400 border-green-500/30">
+          <CheckCircle2 className="w-3 h-3 mr-1" />
+          Returned
+        </span>
+      );
+    } else if (isOverdue) {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border bg-red-500/20 text-red-400 border-red-500/30">
+          <AlertTriangle className="w-3 h-3 mr-1" />
+          Overdue
+        </span>
+      );
+    } else {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border bg-orange-500/20 text-orange-400 border-orange-500/30">
+          <RotateCcw className="w-3 h-3 mr-1" />
+          Pending
+        </span>
+      );
     }
   };
 
-  // ENHANCED RENTAL DATE FORMATTING
-  const formatRentalDate = (date) => {
-    if (!date) return 'N/A';
-    
-    // Use the enhanced formatDate if available
-    if (formatDate && typeof formatDate === 'function') {
-      return formatDate(date, { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-    
-    // Fallback
-    try {
-      const validDate = new Date(date);
-      if (isNaN(validDate.getTime())) {
-        // If it's already a formatted string, return as is
-        if (typeof date === 'string' && (date.includes('/') || date.includes('-'))) {
-          return date;
-        }
-        return 'Invalid Date';
-      }
-      return validDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch (error) {
-      console.error('Error formatting rental date:', error);
-      return 'Date Error';
-    }
+  // NEW: Render rental items with images and names
+  const renderRentalItems = (order) => {
+    const items = order.items || order.rentalItems || [];
+    if (items.length === 0) return <span className="text-gray-400">No items</span>;
+
+    return (
+      <div className="space-y-2">
+        {items.slice(0, 2).map((item, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-gray-700 rounded overflow-hidden flex-shrink-0">
+              {item.imageUrl || item.image ? (
+                <img
+                  src={item.imageUrl || item.image}
+                  alt={item.name || 'Item'}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div className={`w-full h-full ${item.imageUrl || item.image ? 'hidden' : 'flex'} items-center justify-center`}>
+                <FileImage className="w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-white truncate font-medium">
+                {item.name || item.title || 'Unnamed Item'}
+              </p>
+              {item.brand && (
+                <p className="text-xs text-gray-400 truncate">{item.brand}</p>
+              )}
+            </div>
+            {item.quantity && (
+              <span className="text-xs text-gray-400">x{item.quantity}</span>
+            )}
+          </div>
+        ))}
+        {items.length > 2 && (
+          <p className="text-xs text-gray-400">+{items.length - 2} more items</p>
+        )}
+      </div>
+    );
   };
 
+  // ENHANCED: Action Menu with Physical ID Verification
   const ActionMenu = ({ order, isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-      <div className="absolute right-0 top-8 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-20">
+      <div className="absolute right-0 top-8 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-20">
         <div className="py-1">
           <button
             onClick={() => {
@@ -208,6 +317,42 @@ const OrdersTable = ({
               <option value="refunded">Refunded</option>
             </select>
           </div>
+
+          {/* Return Status Toggle */}
+          <div className="px-4 py-2">
+            <label className="flex items-center space-x-2 text-xs text-gray-300">
+              <input
+                type="checkbox"
+                checked={order.itemReturned || false}
+                onChange={(e) => {
+                  onUpdateReturnStatus(order.id, e.target.checked, e.target.checked ? new Date() : null);
+                  onClose();
+                }}
+                className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+              />
+              <span>Mark as Returned</span>
+            </label>
+          </div>
+
+          {/* NEW: Physical ID Verification Toggle */}
+          {order.idSubmitted && (
+            
+<div className="px-4 py-2">
+  <label className="flex items-center space-x-2 text-xs text-gray-300">
+    <input
+      type="checkbox"
+      checked={order.physicalIdShown || false}
+      onChange={(e) => {
+        onUpdatePhysicalIdStatus(order.id, e.target.checked);
+        onClose();
+      }}
+      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+    />
+    <span>Customer Showed Physical ID</span>
+  </label>
+</div>
+
+          )}
           
           <div className="border-t border-gray-700 my-1"></div>
           
@@ -224,6 +369,16 @@ const OrdersTable = ({
         </div>
       </div>
     );
+  };
+
+  const toggleRowExpansion = (orderId) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(orderId)) {
+      newExpanded.delete(orderId);
+    } else {
+      newExpanded.add(orderId);
+    }
+    setExpandedRows(newExpanded);
   };
 
   const Pagination = () => {
@@ -334,19 +489,31 @@ const OrdersTable = ({
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">
-                {getStatusBadge(order.status)}
-                {getPaymentStatusBadge(order.paymentStatus)}
+                <div className="flex items-center gap-2">
+                  {getIdVerificationBadge(order)}
+                  {getStatusBadge(order.status)}
+                </div>
+                <div className="flex items-center gap-2">
+                  {getReturnStatusBadge(order)}
+                  {getPaymentStatusBadge(order.paymentStatus)}
+                </div>
               </div>
             </div>
+
+            {/* Mobile Rental Items Display */}
+            <div className="mb-3">
+              <label className="text-xs text-gray-400 mb-1 block">Rental Items</label>
+              {renderRentalItems(order)}
+            </div>
             
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-2 gap-3 text-sm mb-3">
               <div className="flex items-center gap-2 text-gray-400">
                 <Calendar className="w-4 h-4" />
                 <span>{safeFormatDate(order.createdAt)}</span>
               </div>
               <div className="flex items-center gap-2 text-gray-400">
                 <CreditCard className="w-4 h-4" />
-                <span>{formatCurrency(order.pricing?.total || 0)}</span>
+                <span>{formatCurrency((order.pricing?.total || 0) + calculatePenalty(order))}</span>
               </div>
               <div className="flex items-center gap-2 text-gray-400">
                 <MapPin className="w-4 h-4" />
@@ -354,11 +521,23 @@ const OrdersTable = ({
               </div>
               <div className="flex items-center gap-2 text-gray-400">
                 <Package className="w-4 h-4" />
-                <span>{order.items?.length || 0} items</span>
+                <span>{(order.items || order.rentalItems || []).length} items</span>
               </div>
             </div>
+
+            {/* Penalty Warning for Mobile */}
+            {calculatePenalty(order) > 0 && (
+              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-2 mb-3">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400" />
+                  <span className="text-red-400 text-xs font-medium">
+                    Late Return Penalty: {formatCurrency(calculatePenalty(order))}
+                  </span>
+                </div>
+              </div>
+            )}
             
-            <div className="mt-3 flex gap-2">
+            <div className="flex gap-2">
               <button
                 onClick={() => onViewDetails(order)}
                 className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
@@ -391,11 +570,13 @@ const OrdersTable = ({
               <tr className="border-b border-gray-700">
                 <th className="text-left py-4 px-4 text-gray-300 font-semibold">Order</th>
                 <th className="text-left py-4 px-4 text-gray-300 font-semibold">Customer</th>
-                <th className="text-left py-4 px-4 text-gray-300 font-semibold">Date</th>
                 <th className="text-left py-4 px-4 text-gray-300 font-semibold">Items</th>
+                <th className="text-left py-4 px-4 text-gray-300 font-semibold">Date</th>
                 <th className="text-left py-4 px-4 text-gray-300 font-semibold">Total</th>
                 <th className="text-left py-4 px-4 text-gray-300 font-semibold">Status</th>
                 <th className="text-left py-4 px-4 text-gray-300 font-semibold">Payment</th>
+                <th className="text-left py-4 px-4 text-gray-300 font-semibold">Return</th>
+                <th className="text-center py-4 px-4 text-gray-300 font-semibold">Physical ID</th>
                 <th className="text-right py-4 px-4 text-gray-300 font-semibold">Actions</th>
               </tr>
             </thead>
@@ -430,6 +611,29 @@ const OrdersTable = ({
                         </span>
                       </div>
                     </td>
+
+                    {/* NEW: Items Column with Images */}
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => toggleRowExpansion(order.id)}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          {expandedRows.has(order.id) ? 
+                            <ChevronUp className="w-4 h-4" /> : 
+                            <ChevronDown className="w-4 h-4" />
+                          }
+                        </button>
+                        <div>
+                          <span className="text-white text-sm">
+                            {(order.items || order.rentalItems || []).length} items
+                          </span>
+                          <div className="text-xs text-gray-400">
+                            {order.pricing?.rentalDays || order.rentalDetails?.duration || 0} days
+                          </div>
+                        </div>
+                      </div>
+                    </td>
                     
                     <td className="py-4 px-4">
                       <div className="flex flex-col">
@@ -446,19 +650,15 @@ const OrdersTable = ({
                     
                     <td className="py-4 px-4">
                       <div className="flex flex-col">
-                        <span className="text-white">
-                          {order.items?.length || 0} items
+                        <span className="text-white font-semibold">
+                          {formatCurrency((order.pricing?.total || 0) + calculatePenalty(order))}
                         </span>
-                        <span className="text-xs text-gray-400">
-                          {order.pricing?.rentalDays || order.rentalDetails?.duration || 0} days
-                        </span>
+                        {calculatePenalty(order) > 0 && (
+                          <span className="text-xs text-red-400">
+                            +{formatCurrency(calculatePenalty(order))} penalty
+                          </span>
+                        )}
                       </div>
-                    </td>
-                    
-                    <td className="py-4 px-4">
-                      <span className="text-white font-semibold">
-                        {formatCurrency(order.pricing?.total || 0)}
-                      </span>
                     </td>
                     
                     <td className="py-4 px-4">
@@ -475,6 +675,20 @@ const OrdersTable = ({
                         )}
                       </div>
                     </td>
+
+                    <td className="py-4 px-4">
+                      {getReturnStatusBadge(order)}
+                    </td>
+
+                    {/* ENHANCED: ID Status Column */}
+                  <td className="py-4 px-4 text-center">
+                    <div className="flex flex-col items-center space-y-1">
+                      {getIdVerificationBadge(order)}
+                      <span className="text-xs text-gray-400">
+                        {order.physicalIdShown ? 'Shown' : 'Not Shown'}
+                      </span>
+                    </div>
+                  </td>
                     
                     <td className="py-4 px-4">
                       <div className="flex items-center justify-end gap-2">
@@ -503,6 +717,18 @@ const OrdersTable = ({
                       </div>
                     </td>
                   </tr>
+
+                  {/* Expandable Row for Item Details */}
+                  {expandedRows.has(order.id) && (
+                    <tr className="bg-gray-700/20">
+                      <td colSpan="10" className="px-4 py-3 border-b border-gray-700/30">
+                        <div className="space-y-2">
+                          <h4 className="text-white font-medium text-sm mb-2">Rental Items:</h4>
+                          {renderRentalItems(order)}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </React.Fragment>
               ))}
             </tbody>

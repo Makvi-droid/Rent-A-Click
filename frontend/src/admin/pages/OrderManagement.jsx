@@ -1,4 +1,4 @@
-// OrderManagement.jsx - Enhanced with proper admin verification and FIXED DATE HANDLING
+// OrderManagement.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from '../../firebase';
@@ -46,7 +46,10 @@ const OrderManagement = () => {
     dateRange: 'all',
     searchQuery: '',
     customDateStart: '',
-    customDateEnd: ''
+    customDateEnd: '',
+    returnStatus: 'all',
+    physicalIdShown: 'all',
+    idVerification: 'all'
   });
 
   // Pagination
@@ -61,60 +64,51 @@ const OrderManagement = () => {
     completed: 0,
     cancelled: 0,
     totalRevenue: 0,
-    pendingRevenue: 0
+    pendingRevenue: 0,
+    itemsReturned: 0,
+    itemsPending: 0,
+    overdueItems: 0,
+    idVerified: 0,
+    idMissing: 0,
+    physicalIdShown: 0,
+    physicalIdNotShown: 0,
+    totalPenalties: 0
   });
 
-  // ENHANCED DATE CONVERSION FUNCTION
+  const LATE_RETURN_PENALTY = 150;
+
+  // Date conversion function
   const convertFirebaseTimestamp = (timestamp) => {
     try {
-      // Handle different timestamp formats
-      if (!timestamp) {
-        console.warn('Timestamp is null or undefined');
-        return new Date();
-      }
-      
-      // If it's already a Date object
-      if (timestamp instanceof Date) {
-        return isNaN(timestamp.getTime()) ? new Date() : timestamp;
-      }
-      
-      // If it's a Firebase Timestamp object
+      if (!timestamp) return new Date();
+      if (timestamp instanceof Date) return isNaN(timestamp.getTime()) ? new Date() : timestamp;
       if (timestamp && typeof timestamp.toDate === 'function') {
         const date = timestamp.toDate();
         return isNaN(date.getTime()) ? new Date() : date;
       }
-      
-      // If it's a timestamp in milliseconds (number)
       if (typeof timestamp === 'number') {
         const date = new Date(timestamp);
         return isNaN(date.getTime()) ? new Date() : date;
       }
-      
-      // If it's a string, try to parse it
       if (typeof timestamp === 'string') {
         const date = new Date(timestamp);
         return isNaN(date.getTime()) ? new Date() : date;
       }
-      
-      // If it has seconds property (Firestore timestamp format)
       if (timestamp && timestamp.seconds) {
         const date = new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000);
         return isNaN(date.getTime()) ? new Date() : date;
       }
-      
-      console.warn('Unknown timestamp format:', timestamp);
       return new Date();
     } catch (error) {
-      console.error('Error converting timestamp:', error, 'Original timestamp:', timestamp);
+      console.error('Error converting timestamp:', error);
       return new Date();
     }
   };
 
-  // ENHANCED DATE FORMATTING FUNCTION
+  // Date formatting function
   const formatDate = (date, options = {}) => {
     try {
       const validDate = convertFirebaseTimestamp(date);
-      
       const defaultOptions = {
         year: 'numeric',
         month: 'short',
@@ -124,7 +118,6 @@ const OrderManagement = () => {
         hour12: true,
         timeZone: 'Asia/Manila'
       };
-      
       return new Intl.DateTimeFormat('en-PH', { ...defaultOptions, ...options }).format(validDate);
     } catch (error) {
       console.error('Error formatting date:', error);
@@ -147,10 +140,8 @@ const OrderManagement = () => {
         
         if (adminDoc.exists()) {
           setIsAdmin(true);
-          console.log('User verified as admin');
         } else {
           setIsAdmin(false);
-          console.log('User is not an admin');
         }
       } catch (error) {
         console.error('Error checking admin status:', error);
@@ -181,7 +172,27 @@ const OrderManagement = () => {
     }
   };
 
-  // Fetch orders from Firebase (only if user is admin) - ENHANCED WITH BETTER DATE HANDLING
+  // Check if return is overdue
+  const isReturnOverdue = (order) => {
+    if (order.itemReturned) return false;
+    
+    const returnDate = new Date(order.rentalDetails?.endDate);
+    const returnTime = order.rentalDetails?.returnTime;
+    
+    if (returnTime) {
+      const [hours, minutes] = returnTime.split(':');
+      returnDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    }
+    
+    return new Date() > returnDate;
+  };
+
+  // Calculate penalty for overdue items
+  const calculatePenalty = (order) => {
+    return isReturnOverdue(order) && !order.itemReturned ? LATE_RETURN_PENALTY : 0;
+  };
+
+  // Fetch orders from Firebase
   useEffect(() => {
     if (!user || !isAdmin || adminCheckLoading) return;
 
@@ -197,13 +208,15 @@ const OrderManagement = () => {
             return {
               id: doc.id,
               ...data,
-              // ENHANCED DATE CONVERSION
+              // Date conversion
               createdAt: convertFirebaseTimestamp(data.createdAt),
               updatedAt: convertFirebaseTimestamp(data.updatedAt),
-              // Add formatted dates for easy display
+              returnedAt: data.returnedAt ? convertFirebaseTimestamp(data.returnedAt) : null,
+              // Formatted dates
               formattedCreatedAt: formatDate(data.createdAt),
               formattedUpdatedAt: formatDate(data.updatedAt),
-              // Handle rental dates if they exist
+              formattedReturnedAt: data.returnedAt ? formatDate(data.returnedAt) : null,
+              // Handle rental dates
               rentalDetails: data.rentalDetails ? {
                 ...data.rentalDetails,
                 rentalDate: convertFirebaseTimestamp(data.rentalDetails?.rentalDate),
@@ -218,11 +231,16 @@ const OrderManagement = () => {
                   month: 'short', 
                   day: 'numeric' 
                 })
-              } : null
+              } : null,
+              // Computed properties
+              isOverdue: !data.itemReturned && isReturnOverdue({ ...data, rentalDetails: data.rentalDetails }),
+              hasIdVerification: Boolean(data.idSubmitted),
+              physicalIdShown: Boolean(data.physicalIdShown),
+              physicalIdShownAt: data.physicalIdShownAt ? convertFirebaseTimestamp(data.physicalIdShownAt) : null,
+              penalty: calculatePenalty({ ...data, rentalDetails: data.rentalDetails, itemReturned: data.itemReturned })
             };
           });
           
-          console.log('Orders loaded with enhanced date handling:', ordersData.length);
           setOrders(ordersData);
           calculateStats(ordersData);
           setLoading(false);
@@ -244,7 +262,9 @@ const OrderManagement = () => {
 
   // Calculate statistics
   const calculateStats = (ordersData) => {
-    const stats = {
+    const totalPenalties = ordersData.reduce((sum, order) => sum + calculatePenalty(order), 0);
+    
+    const newStats = {
       total: ordersData.length,
       pending: ordersData.filter(order => order.status === 'pending').length,
       confirmed: ordersData.filter(order => order.status === 'confirmed').length,
@@ -255,12 +275,21 @@ const OrderManagement = () => {
         .reduce((sum, order) => sum + (parseFloat(order.pricing?.total) || 0), 0),
       pendingRevenue: ordersData
         .filter(order => order.paymentStatus === 'pending')
-        .reduce((sum, order) => sum + (parseFloat(order.pricing?.total) || 0), 0)
+        .reduce((sum, order) => sum + (parseFloat(order.pricing?.total) || 0), 0),
+      itemsReturned: ordersData.filter(order => order.itemReturned).length,
+      itemsPending: ordersData.filter(order => !order.itemReturned && !isReturnOverdue(order)).length,
+      overdueItems: ordersData.filter(order => isReturnOverdue(order) && !order.itemReturned).length,
+      idVerified: ordersData.filter(order => order.idSubmitted).length,
+      idMissing: ordersData.filter(order => !order.idSubmitted).length,
+      physicalIdShown: ordersData.filter(order => order.physicalIdShown === true).length,
+      physicalIdNotShown: ordersData.filter(order => order.physicalIdShown !== true).length,
+      totalPenalties
     };
-    setStats(stats);
+    
+    setStats(newStats);
   };
 
-  // ENHANCED DATE FILTERING
+  // Date filtering
   const isDateInRange = (orderDate, startDate, endDate) => {
     try {
       const date = convertFirebaseTimestamp(orderDate);
@@ -275,7 +304,7 @@ const OrderManagement = () => {
     }
   };
 
-  // Apply filters - ENHANCED WITH BETTER DATE HANDLING
+  // Filter application
   useEffect(() => {
     let filtered = [...orders];
 
@@ -299,7 +328,55 @@ const OrderManagement = () => {
       filtered = filtered.filter(order => order.rentalDetails?.deliveryMethod === filters.deliveryMethod);
     }
 
-    // ENHANCED DATE RANGE FILTER
+    // Return status filter
+    if (filters.returnStatus !== 'all') {
+      switch (filters.returnStatus) {
+        case 'returned':
+          filtered = filtered.filter(order => order.itemReturned);
+          break;
+        case 'pending':
+          filtered = filtered.filter(order => !order.itemReturned && !isReturnOverdue(order));
+          break;
+        case 'overdue':
+          filtered = filtered.filter(order => !order.itemReturned && isReturnOverdue(order));
+          break;
+        default:
+          break;
+      }
+    }
+
+    // ID verification filter
+    if (filters.idVerification !== 'all') {
+      switch (filters.idVerification) {
+        case 'submitted':
+          filtered = filtered.filter(order => order.idSubmitted);
+          break;
+        case 'physically-verified':
+          filtered = filtered.filter(order => order.idSubmitted && order.physicalIdShown);
+          break;
+        case 'missing':
+          filtered = filtered.filter(order => !order.idSubmitted);
+          break;
+        default:
+          break;
+      }
+    }
+
+    // Physical ID filter
+    if (filters.physicalIdShown !== 'all') {
+      switch (filters.physicalIdShown) {
+        case 'shown':
+          filtered = filtered.filter(order => order.physicalIdShown === true);
+          break;
+        case 'not-shown':
+          filtered = filtered.filter(order => order.physicalIdShown !== true);
+          break;
+        default:
+          break;
+      }
+    }
+
+    // Date range filter
     if (filters.dateRange !== 'all') {
       const now = new Date();
       let startDate;
@@ -368,7 +445,6 @@ const OrderManagement = () => {
         status: newStatus,
         updatedAt: new Date()
       });
-      console.log('Order status updated successfully');
     } catch (error) {
       console.error('Error updating order status:', error);
       if (error.code === 'permission-denied') {
@@ -392,7 +468,6 @@ const OrderManagement = () => {
         paymentStatus: newPaymentStatus,
         updatedAt: new Date()
       });
-      console.log('Payment status updated successfully');
     } catch (error) {
       console.error('Error updating payment status:', error);
       if (error.code === 'permission-denied') {
@@ -403,7 +478,78 @@ const OrderManagement = () => {
     }
   };
 
-  // Delete order with enhanced error handling
+  // Update return status
+  const updateReturnStatus = async (orderId, isReturned, returnedAt = null) => {
+    if (!isAdmin) {
+      alert('You do not have permission to update return status');
+      return;
+    }
+
+    try {
+      const orderRef = doc(db, 'checkouts', orderId);
+      const updateData = {
+        itemReturned: isReturned,
+        updatedAt: new Date()
+      };
+
+      if (isReturned && returnedAt) {
+        updateData.returnedAt = returnedAt;
+      } else if (!isReturned) {
+        updateData.returnedAt = null;
+      }
+
+      await updateDoc(orderRef, updateData);
+    } catch (error) {
+      console.error('Error updating return status:', error);
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. Please check your admin privileges.');
+      } else {
+        alert('Failed to update return status: ' + error.message);
+      }
+    }
+  };
+
+  // FIXED: Update physical ID verification status
+  const updatePhysicalIdStatus = async (orderId, physicalIdShown) => {
+    if (!isAdmin) {
+      alert('You do not have permission to update ID status');
+      return;
+    }
+
+    if (!orderId) {
+      console.error('Order ID is required');
+      return;
+    }
+
+    const isPhysicalIdShown = Boolean(physicalIdShown);
+
+    try {
+      const orderRef = doc(db, 'checkouts', orderId);
+      
+      const updateData = {
+        physicalIdShown: isPhysicalIdShown,
+        updatedAt: new Date()
+      };
+
+      if (isPhysicalIdShown) {
+        updateData.physicalIdShownAt = new Date();
+      } else {
+        updateData.physicalIdShownAt = null;
+      }
+
+      await updateDoc(orderRef, updateData);
+      
+    } catch (error) {
+      console.error('Error updating physical ID status:', error);
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. Please check your admin privileges.');
+      } else {
+        alert('Failed to update physical ID status: ' + error.message);
+      }
+    }
+  };
+
+  // Delete order
   const deleteOrder = async (orderId) => {
     if (!isAdmin) {
       alert('You do not have permission to delete orders');
@@ -415,17 +561,13 @@ const OrderManagement = () => {
     }
 
     try {
-      console.log('Attempting to delete order:', orderId);
       await deleteDoc(doc(db, 'checkouts', orderId));
-      console.log('Order deleted successfully');
       alert('Order deleted successfully');
     } catch (error) {
       console.error('Error deleting order:', error);
       
       if (error.code === 'permission-denied') {
         alert('Permission denied. You may not have admin privileges or the Firestore security rules need to be updated.');
-        console.error('Admin check - isAdmin:', isAdmin);
-        console.error('User ID:', user?.uid);
       } else if (error.code === 'not-found') {
         alert('Order not found. It may have already been deleted.');
       } else {
@@ -482,7 +624,7 @@ const OrderManagement = () => {
     );
   }
 
-  // Not authorized (not an admin)
+  // Not authorized
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -513,26 +655,23 @@ const OrderManagement = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        {/* Header */}
         <OrdersHeader 
           totalOrders={filteredOrders.length}
           user={user}
         />
 
-        {/* Statistics */}
         <OrdersStats 
           stats={stats}
           formatCurrency={formatCurrency}
+          latePenaltyAmount={LATE_RETURN_PENALTY}
         />
 
-        {/* Filters */}
         <OrdersFilters
           filters={filters}
           onFilterChange={handleFilterChange}
           totalResults={filteredOrders.length}
         />
 
-        {/* Orders Table */}
         <OrdersTable
           orders={currentOrders}
           currentPage={currentPage}
@@ -542,12 +681,14 @@ const OrderManagement = () => {
           onViewDetails={viewOrderDetails}
           onUpdateStatus={updateOrderStatus}
           onUpdatePaymentStatus={updatePaymentStatus}
+          onUpdateReturnStatus={updateReturnStatus}
+          onUpdatePhysicalIdStatus={updatePhysicalIdStatus}
           onDeleteOrder={deleteOrder}
           formatCurrency={formatCurrency}
-          formatDate={formatDate} // Pass the formatDate function
+          formatDate={formatDate}
+          latePenaltyAmount={LATE_RETURN_PENALTY}
         />
 
-        {/* Order Details Modal */}
         {showModal && selectedOrder && (
           <OrderDetailsModal
             order={selectedOrder}
@@ -558,8 +699,11 @@ const OrderManagement = () => {
             }}
             onUpdateStatus={updateOrderStatus}
             onUpdatePaymentStatus={updatePaymentStatus}
+            onUpdateReturnStatus={updateReturnStatus}
+            onUpdatePhysicalIdStatus={updatePhysicalIdStatus}
             formatCurrency={formatCurrency}
-            formatDate={formatDate} // Pass the formatDate function
+            formatDate={formatDate}
+            latePenaltyAmount={LATE_RETURN_PENALTY}
           />
         )}
       </div>

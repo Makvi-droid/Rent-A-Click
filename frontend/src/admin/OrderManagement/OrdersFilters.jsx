@@ -1,6 +1,6 @@
-// OrdersFilters.jsx
+// OrdersFilters.jsx - Simplified Physical ID Verification Filter
 import React, { useState } from 'react';
-import { Search, Filter, X, Calendar } from 'lucide-react';
+import { Search, Filter, X, Calendar, Shield } from 'lucide-react';
 
 const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -41,6 +41,19 @@ const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
     { value: 'custom', label: 'Custom Range' }
   ];
 
+  const returnStatusOptions = [
+    { value: 'all', label: 'All Returns' },
+    { value: 'returned', label: 'Returned' },
+    { value: 'pending', label: 'Pending Return' },
+    { value: 'overdue', label: 'Overdue' }
+  ];
+
+  const physicalIdOptions = [
+    { value: 'all', label: 'All ID Status' },
+    { value: 'shown', label: 'ID Shown' },
+    { value: 'not-shown', label: 'ID Not Shown' }
+  ];
+
   const clearFilters = () => {
     onFilterChange('status', 'all');
     onFilterChange('paymentStatus', 'all');
@@ -50,6 +63,8 @@ const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
     onFilterChange('searchQuery', '');
     onFilterChange('customDateStart', '');
     onFilterChange('customDateEnd', '');
+    onFilterChange('returnStatus', 'all');
+    onFilterChange('physicalIdShown', 'all');
   };
 
   const hasActiveFilters = () => {
@@ -58,6 +73,8 @@ const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
            filters.paymentMethod !== 'all' ||
            filters.deliveryMethod !== 'all' ||
            filters.dateRange !== 'all' ||
+           filters.returnStatus !== 'all' ||
+           filters.physicalIdShown !== 'all' ||
            filters.searchQuery.trim() !== '';
   };
 
@@ -146,13 +163,13 @@ const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Payment Method</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Return Status</label>
             <select
-              value={filters.paymentMethod}
-              onChange={(e) => onFilterChange('paymentMethod', e.target.value)}
+              value={filters.returnStatus}
+              onChange={(e) => onFilterChange('returnStatus', e.target.value)}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {paymentMethodOptions.map(option => (
+              {returnStatusOptions.map(option => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -179,8 +196,24 @@ const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
         {/* Advanced Filters */}
         {showAdvanced && (
           <div className="border-t border-gray-700 pt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
               
+              {/* Payment Method */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Payment Method</label>
+                <select
+                  value={filters.paymentMethod}
+                  onChange={(e) => onFilterChange('paymentMethod', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {paymentMethodOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Delivery Method */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Delivery Method</label>
@@ -197,9 +230,30 @@ const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
                 </select>
               </div>
 
-              {/* Custom Date Range */}
-              {filters.dateRange === 'custom' && (
-                <div className="lg:col-span-1">
+              {/* Physical ID Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  <Shield className="w-4 h-4 inline mr-1" />
+                  Physical ID Status
+                </label>
+                <select
+                  value={filters.physicalIdShown}
+                  onChange={(e) => onFilterChange('physicalIdShown', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  {physicalIdOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Custom Date Range */}
+            {filters.dateRange === 'custom' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">
                     <Calendar className="w-4 h-4 inline mr-1" />
                     Custom Date Range
@@ -219,8 +273,8 @@ const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
                     />
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -272,6 +326,30 @@ const OrdersFilters = ({ filters, onFilterChange, totalResults }) => {
                   <button
                     onClick={() => onFilterChange('deliveryMethod', 'all')}
                     className="ml-1 hover:bg-orange-500/30 rounded-full p-0.5"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+
+              {filters.returnStatus !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded-md text-sm">
+                  Return: {returnStatusOptions.find(opt => opt.value === filters.returnStatus)?.label}
+                  <button
+                    onClick={() => onFilterChange('returnStatus', 'all')}
+                    className="ml-1 hover:bg-cyan-500/30 rounded-full p-0.5"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+
+              {filters.physicalIdShown !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-md text-sm">
+                  Physical ID: {physicalIdOptions.find(opt => opt.value === filters.physicalIdShown)?.label}
+                  <button
+                    onClick={() => onFilterChange('physicalIdShown', 'all')}
+                    className="ml-1 hover:bg-emerald-500/30 rounded-full p-0.5"
                   >
                     <X className="w-3 h-3" />
                   </button>

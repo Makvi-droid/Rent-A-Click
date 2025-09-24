@@ -44,17 +44,28 @@ const CustomCalendar = ({ selected, onSelect, onClose, minDate }) => {
     return days;
   };
 
+  // FIXED: Proper date comparison for disabling past dates
   const isDateDisabled = (date) => {
     if (!minDate) return false;
-    return date < minDate;
+    
+    // Create date objects with time set to 00:00:00 for accurate comparison
+    const compareDate = new Date(date);
+    compareDate.setHours(0, 0, 0, 0);
+    
+    const minDateNormalized = new Date(minDate);
+    minDateNormalized.setHours(0, 0, 0, 0);
+    
+    return compareDate < minDateNormalized;
   };
 
   const handlePrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+    setCurrentMonth(newMonth);
   };
 
   const handleNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1);
+    setCurrentMonth(newMonth);
   };
 
   const handleDateSelect = (date) => {
@@ -62,6 +73,19 @@ const CustomCalendar = ({ selected, onSelect, onClose, minDate }) => {
       onSelect(date);
       onClose();
     }
+  };
+
+  // FIXED: Prevent navigation to months that are entirely in the past
+  const canNavigateToPrevMonth = () => {
+    if (!minDate) return true;
+    
+    const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+    const lastDayOfPrevMonth = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0);
+    
+    const minDateNormalized = new Date(minDate);
+    minDateNormalized.setHours(0, 0, 0, 0);
+    
+    return lastDayOfPrevMonth >= minDateNormalized;
   };
 
   const days = getDaysInMonth(currentMonth);
@@ -73,14 +97,19 @@ const CustomCalendar = ({ selected, onSelect, onClose, minDate }) => {
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={handlePrevMonth}
-          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+          disabled={!canNavigateToPrevMonth()}
+          className={`p-2 rounded-lg transition-colors ${
+            canNavigateToPrevMonth() 
+              ? 'hover:bg-gray-700 cursor-pointer' 
+              : 'opacity-50 cursor-not-allowed'
+          }`}
         >
           <ChevronLeft size={16} className="text-gray-300" />
         </button>
         <h3 className="text-white font-semibold">{monthYear}</h3>
         <button
           onClick={handleNextMonth}
-          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
         >
           <ChevronRight size={16} className="text-gray-300" />
         </button>
@@ -113,7 +142,7 @@ const CustomCalendar = ({ selected, onSelect, onClose, minDate }) => {
                 ${isSelected ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white" : ""}
                 ${isToday && !isSelected ? "bg-gray-700 text-purple-400" : ""}
                 ${!isSelected && dayObj.isCurrentMonth && !isDisabled ? "hover:bg-gray-700" : ""}
-                ${isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}
+                ${isDisabled ? "opacity-30 cursor-not-allowed line-through" : "cursor-pointer"}
               `}
             >
               {dayObj.day}
@@ -121,6 +150,13 @@ const CustomCalendar = ({ selected, onSelect, onClose, minDate }) => {
           );
         })}
       </div>
+      
+      {/* Show helpful message for disabled dates */}
+      {minDate && (
+        <div className="mt-3 text-xs text-gray-400 text-center">
+          Dates before {formatDate(minDate)} are not available
+        </div>
+      )}
     </div>
   );
 };
