@@ -1,5 +1,9 @@
-// checkoutHandlers.js
-import { formatCurrency, updateCustomerProfile, generateNextCheckoutId, saveCheckoutToFirebase } from '../../utils/checkOutUtils';
+// checkoutHandlers.js - FIXED: Removed customer collection updates
+import {
+  formatCurrency,
+  generateNextCheckoutId,
+  saveCheckoutToFirebase,
+} from "../../utils/checkOutUtils";
 
 export const createPayPalHandlers = (
   setPaymentStatus,
@@ -8,17 +12,17 @@ export const createPayPalHandlers = (
   setCurrentStep
 ) => {
   const handlePayPalSuccess = async (paymentDetails) => {
-    console.log('PayPal payment successful:', paymentDetails);
-    
+    console.log("PayPal payment successful:", paymentDetails);
+
     try {
-      setPaymentStatus('completed');
+      setPaymentStatus("completed");
       setPaypalPaymentDetails(paymentDetails);
-      
-      setFormData(prev => ({ 
-        ...prev, 
-        paymentCompletedAt: new Date().toISOString() 
+
+      setFormData((prev) => ({
+        ...prev,
+        paymentCompletedAt: new Date().toISOString(),
       }));
-      
+
       const message = `✅ Payment successful! 
       
 Payment ID: ${paymentDetails.paymentId}
@@ -26,24 +30,23 @@ Amount: ${formatCurrency(paymentDetails.amount)}
 Payer: ${paymentDetails.payerName}
 
 You can now continue to review your rental.`;
-      
+
       alert(message);
-      
+
       setTimeout(() => {
         setCurrentStep(4);
       }, 1000);
-      
     } catch (error) {
-      console.error('Error in PayPal success handler:', error);
-      setPaymentStatus('failed');
+      console.error("Error in PayPal success handler:", error);
+      setPaymentStatus("failed");
     }
   };
 
   const handlePayPalError = (error) => {
-    console.error('PayPal payment failed:', error);
-    setPaymentStatus('failed');
+    console.error("PayPal payment failed:", error);
+    setPaymentStatus("failed");
     setPaypalPaymentDetails(null);
-    alert('❌ Payment failed. Please try again or choose cash payment.');
+    alert("❌ Payment failed. Please try again or choose cash payment.");
   };
 
   return { handlePayPalSuccess, handlePayPalError };
@@ -63,38 +66,40 @@ export const createSubmitHandler = (
   navigate
 ) => {
   return async (setIsSubmitting) => {
-    if (formData.paymentMethod === 'paypal' && paymentStatus !== 'completed') {
-      alert('Please complete the PayPal payment first.');
+    if (formData.paymentMethod === "paypal" && paymentStatus !== "completed") {
+      alert("Please complete the PayPal payment first.");
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     try {
-      console.log('Starting checkout submission...');
-      
-      // NEW: Enhanced form data with time selections and ID verification
+      console.log("Starting checkout submission...");
+
+      // Enhanced form data with time selections and ID verification
       const enhancedFormData = {
         ...formData,
         // Store time selections
         pickupTime: formData.pickupTime || null,
         returnTime: formData.returnTime,
         // Store ID verification status
-        idVerificationCompleted: formData.googleFormCompleted,
-        idSubmissionTimestamp: formData.googleFormCompleted ? new Date().toISOString() : null,
+        idVerificationCompleted: formData.idSubmitted,
+        idSubmissionTimestamp: formData.idSubmitted
+          ? new Date().toISOString()
+          : null,
         // Store penalty agreement
         penaltyAgreementAccepted: true,
-        submittedAt: new Date().toISOString()
+        submittedAt: new Date().toISOString(),
       };
-      
-      // Update customer profile with enhanced checkout data
-      await updateCustomerProfile(customerDocId, enhancedFormData);
-      
+
+      // REMOVED: Customer profile update - checkout data stays separate
+      // await updateCustomerProfile(customerDocId, enhancedFormData);
+
       // Generate the checkout ID
       const checkoutId = await generateNextCheckoutId();
-      console.log('Generated checkout ID:', checkoutId);
-      
-      // Save to Firebase with enhanced data
+      console.log("Generated checkout ID:", checkoutId);
+
+      // Save to Firebase with enhanced data - this creates the order/checkout record only
       const savedCheckout = await saveCheckoutToFirebase(
         checkoutId,
         enhancedFormData,
@@ -105,13 +110,13 @@ export const createSubmitHandler = (
         shouldCreateCustomerProfile,
         pricing
       );
-      
+
       // Clear the cart
       try {
         await clearCart();
-        console.log('Cart cleared successfully');
+        console.log("Cart cleared successfully");
       } catch (cartError) {
-        console.warn('Failed to clear cart:', cartError);
+        console.warn("Failed to clear cart:", cartError);
       }
 
       // Create enhanced order object for callback
@@ -121,54 +126,55 @@ export const createSubmitHandler = (
         items: rentalItems,
         formData: enhancedFormData,
         pricing,
-        status: formData.paymentMethod === 'paypal' ? 'confirmed' : 'pending',
-        paymentStatus: formData.paymentMethod === 'paypal' ? 'paid' : 'pending',
+        status: formData.paymentMethod === "paypal" ? "confirmed" : "pending",
+        paymentStatus: formData.paymentMethod === "paypal" ? "paid" : "pending",
         paymentDetails: paypalPaymentDetails,
-        // NEW: Include time and verification details
+        // Include time and verification details
         timeDetails: {
           pickupTime: enhancedFormData.pickupTime,
           returnTime: enhancedFormData.returnTime,
-          deliveryMethod: enhancedFormData.deliveryMethod
+          deliveryMethod: enhancedFormData.deliveryMethod,
         },
         verification: {
-          idRequired: rentalItems.some(item => 
-            item.name.toLowerCase().includes('camera') || 
-            item.category?.toLowerCase().includes('camera')
-          ),
+          idRequired: true, // All rentals now require ID
           idSubmitted: enhancedFormData.idVerificationCompleted,
-          submissionTimestamp: enhancedFormData.idSubmissionTimestamp
+          submissionTimestamp: enhancedFormData.idSubmissionTimestamp,
         },
         createdAt: new Date().toISOString(),
       };
 
       onOrderComplete(orderDetails);
-      
+
       // Enhanced success message based on payment method
-      const timeInfo = enhancedFormData.deliveryMethod === 'pickup' 
-        ? `Pickup: ${formatTime(enhancedFormData.pickupTime)}\nReturn: ${formatTime(enhancedFormData.returnTime)}`
-        : `Return: ${formatTime(enhancedFormData.returnTime)}`;
-      
-      const idVerificationNote = enhancedFormData.idVerificationCompleted 
-        ? '\n✅ ID verification completed' 
-        : '';
-      
-      const successMessage = formData.paymentMethod === 'paypal' 
-        ? `🎉 Payment successful! Rental booking confirmed!
+      const timeInfo =
+        enhancedFormData.deliveryMethod === "pickup"
+          ? `Pickup: ${formatTime(
+              enhancedFormData.pickupTime
+            )}\nReturn: ${formatTime(enhancedFormData.returnTime)}`
+          : `Return: ${formatTime(enhancedFormData.returnTime)}`;
+
+      const idVerificationNote = enhancedFormData.idVerificationCompleted
+        ? "\n✅ ID verification completed"
+        : "";
+
+      const successMessage =
+        formData.paymentMethod === "paypal"
+          ? `🎉 Payment successful! Rental booking confirmed!
 
 Order ID: ${checkoutId}
 PayPal Transaction ID: ${paypalPaymentDetails?.paymentId}
 Total Paid: ${formatCurrency(pricing.total)}
-Rental Period: ${pricing.rentalDays} day${pricing.rentalDays > 1 ? 's' : ''}
+Rental Period: ${pricing.rentalDays} day${pricing.rentalDays > 1 ? "s" : ""}
 
 ${timeInfo}${idVerificationNote}
 
 ⚠️ IMPORTANT: Late returns incur penalty charges.
 Confirmation email sent to ${formData.email}.`
-        : `🎉 Rental booking submitted successfully!
+          : `🎉 Rental booking submitted successfully!
 
 Order ID: ${checkoutId}
 Total: ${formatCurrency(pricing.total)}
-Rental Period: ${pricing.rentalDays} day${pricing.rentalDays > 1 ? 's' : ''}
+Rental Period: ${pricing.rentalDays} day${pricing.rentalDays > 1 ? "s" : ""}
 
 ${timeInfo}${idVerificationNote}
 
@@ -177,32 +183,35 @@ You'll receive a confirmation email shortly at ${formData.email}.
 Our team will contact you within 24 hours to confirm your rental.`;
 
       alert(successMessage);
-      
+
       // Redirect with success state
-      navigate('/productsPage', { 
-        state: { 
-          orderSuccess: true, 
+      navigate("/productsPage", {
+        state: {
+          orderSuccess: true,
           orderId: checkoutId,
           paymentMethod: formData.paymentMethod,
           customerId: customerDocId,
           timeDetails: orderDetails.timeDetails,
-          verification: orderDetails.verification
-        } 
+          verification: orderDetails.verification,
+        },
       });
-      
     } catch (error) {
-      console.error('Order submission error:', error);
-      
-      let errorMessage = "❌ There was an error processing your order. Please try again.";
-      
-      if (error.message.includes('permission')) {
-        errorMessage = "❌ Permission denied. Please make sure you're logged in and try again.";
-      } else if (error.message.includes('network')) {
-        errorMessage = "❌ Network error. Please check your connection and try again.";
-      } else if (error.message.includes('Failed to save checkout')) {
-        errorMessage = "❌ Failed to save your order. Please try again or contact support.";
+      console.error("Order submission error:", error);
+
+      let errorMessage =
+        "❌ There was an error processing your order. Please try again.";
+
+      if (error.message.includes("permission")) {
+        errorMessage =
+          "❌ Permission denied. Please make sure you're logged in and try again.";
+      } else if (error.message.includes("network")) {
+        errorMessage =
+          "❌ Network error. Please check your connection and try again.";
+      } else if (error.message.includes("Failed to save checkout")) {
+        errorMessage =
+          "❌ Failed to save your order. Please try again or contact support.";
       }
-      
+
       alert(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -212,9 +221,9 @@ Our team will contact you within 24 hours to confirm your rental.`;
 
 // Helper function to format time for display
 const formatTime = (time24) => {
-  if (!time24) return '';
-  const [hour, minute] = time24.split(':');
+  if (!time24) return "";
+  const [hour, minute] = time24.split(":");
   const hour12 = parseInt(hour) > 12 ? parseInt(hour) - 12 : parseInt(hour);
-  const ampm = parseInt(hour) >= 12 ? 'PM' : 'AM';
+  const ampm = parseInt(hour) >= 12 ? "PM" : "AM";
   return `${hour12}:${minute} ${ampm}`;
 };
