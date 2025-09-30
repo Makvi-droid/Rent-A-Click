@@ -16,6 +16,11 @@ import UserManagement from "./admin/pages/UserManagement";
 import Dashboard from "./admin/pages/Dashboard";
 import { db } from "./firebase";
 import Reviews from "./pages/Reviews";
+import Settings from "./pages/Settings";
+import Billings from "./pages/Billings";
+import SecuritySettings from "./pages/SecuritySettings";
+import Notifications from "./pages/Notifications";
+import Help from "./pages/Help";
 
 function App() {
   return (
@@ -36,6 +41,11 @@ function App() {
           <Route path="/userManagement" element={<UserManagement />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/reviews" element={<Reviews />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/billing" element={<Billings />} />
+          <Route path="/security" element={<SecuritySettings />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/help" element={<Help />} />
         </Routes>
         <Footer />
       </ToastProvider>
