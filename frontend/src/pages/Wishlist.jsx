@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { firestore } from '../firebase';
-import { useWishlist } from '../hooks/useWishlist';
-import { useCart } from '../hooks/useCart';
-import { useToast } from '../components/Authentication/Toast';
-import EmptyWishlist from '../components/Wishlist/EmptyWishlist';
-import WishlistHeader from '../components/Wishlist/WishlistHeader';
-import WishlistItem from '../components/Wishlist/WishlistItem';
-import Navbar from '../components/Navbar';
+import React, { useState, useEffect } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { firestore } from "../firebase";
+import { useWishlist } from "../hooks/useWishlist";
+import { useCart } from "../hooks/useCart";
+import { useToast } from "../components/Authentication/Toast";
+import EmptyWishlist from "../components/Wishlist/EmptyWishlist";
+import WishlistHeader from "../components/Wishlist/WishlistHeader";
+import WishlistItem from "../components/Wishlist/WishlistItem";
+import Navbar from "../components/Navbar";
 
 // Main Wishlist Component
 const Wishlist = () => {
-  const { 
-    wishlist, 
-    loading: wishlistLoading, 
-    removeFromWishlist, 
-    isLoggedIn, 
-    hasCustomerProfile 
+  const {
+    wishlist,
+    loading: wishlistLoading,
+    removeFromWishlist,
+    isLoggedIn,
+    hasCustomerProfile,
   } = useWishlist();
-  
+
   const { addToCart } = useCart();
   const { showSuccess, showError, showWarning } = useToast();
-  
+
   const [wishlistItems, setWishlistItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('grid');
-  const [sortBy, setSortBy] = useState('dateAdded');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState("grid");
+  const [sortBy, setSortBy] = useState("dateAdded");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Fetch product details for each wishlist item
   useEffect(() => {
@@ -45,18 +45,18 @@ const Wishlist = () => {
 
       try {
         setLoading(true);
-        
+
         const productPromises = wishlist.map(async (productId) => {
           try {
-            const productRef = doc(firestore, 'products', productId);
+            const productRef = doc(firestore, "products", productId);
             const productDoc = await getDoc(productRef);
-            
+
             if (productDoc.exists()) {
               const productData = productDoc.data();
               return {
                 id: productDoc.id,
                 ...productData,
-                dateAdded: new Date()
+                dateAdded: new Date(),
               };
             } else {
               console.warn(`Product with ID ${productId} not found`);
@@ -69,12 +69,12 @@ const Wishlist = () => {
         });
 
         const products = await Promise.all(productPromises);
-        const validProducts = products.filter(product => product !== null);
-        
+        const validProducts = products.filter((product) => product !== null);
+
         setWishlistItems(validProducts);
       } catch (error) {
-        console.error('Error fetching wishlist items:', error);
-        showError('Failed to load wishlist items');
+        console.error("Error fetching wishlist items:", error);
+        showError("Failed to load wishlist items");
         setWishlistItems([]);
       } finally {
         setLoading(false);
@@ -88,17 +88,18 @@ const Wishlist = () => {
 
   // Filter and sort items
   const filteredAndSortedItems = wishlistItems
-    .filter(item => 
-      item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    .filter(
+      (item) =>
+        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.description?.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
       switch (sortBy) {
-        case 'name':
-          return (a.name || '').localeCompare(b.name || '');
-        case 'price':
+        case "name":
+          return (a.name || "").localeCompare(b.name || "");
+        case "price":
           return (a.price || 0) - (b.price || 0);
-        case 'dateAdded':
+        case "dateAdded":
         default:
           return new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0);
       }
@@ -106,84 +107,110 @@ const Wishlist = () => {
 
   const handleRemoveItem = async (itemId) => {
     try {
-      const item = wishlistItems.find(item => item.id === itemId);
+      const item = wishlistItems.find((item) => item.id === itemId);
       const success = await removeFromWishlist(itemId);
       if (success) {
-        console.log('Item removed from wishlist successfully');
+        console.log("Item removed from wishlist successfully");
       } else {
-        showError('Failed to remove item from wishlist');
+        showError("Failed to remove item from wishlist");
       }
     } catch (error) {
-      console.error('Error removing item:', error);
-      showError('An error occurred while removing the item');
+      console.error("Error removing item:", error);
+      showError("An error occurred while removing the item");
     }
   };
 
   // FIXED: Enhanced handleAddToCart function with comprehensive image handling
+  // UPDATED: Enhanced handleAddToCart function with automatic wishlist removal
   const handleAddToCart = async (item) => {
     try {
-      console.log('🛒 Adding item to cart:', item);
-      console.log('🔍 Item data structure:', JSON.stringify(item, null, 2));
+      console.log("🛒 Adding item to cart:", item);
+      console.log("🔍 Item data structure:", JSON.stringify(item, null, 2));
 
       // COMPREHENSIVE image detection - check all possible image fields
       let itemImage = null;
-      
+
       // List of all possible image field names we might encounter
       const imageFields = [
-        'image',           // Most common
-        'imageUrl',        // Common variant
-        'images',          // Array of images
-        'imageUrls',       // Array of image URLs
-        'photos',          // Alternative naming
-        'photoURL',        // Firebase style
-        'picture',         // Generic naming
-        'thumbnail',       // Thumbnail image
-        'img',             // Short form
-        'mainImage',       // Main product image
-        'primaryImage',    // Primary image
-        'featuredImage',   // Featured image
-        'productImage',    // Product specific
-        'productImages',   // Multiple product images
-        'galleryImages',   // Gallery images
-        'media'            // Media field
+        "image", // Most common
+        "imageUrl", // Common variant
+        "images", // Array of images
+        "imageUrls", // Array of image URLs
+        "photos", // Alternative naming
+        "photoURL", // Firebase style
+        "picture", // Generic naming
+        "thumbnail", // Thumbnail image
+        "img", // Short form
+        "mainImage", // Main product image
+        "primaryImage", // Primary image
+        "featuredImage", // Featured image
+        "productImage", // Product specific
+        "productImages", // Multiple product images
+        "galleryImages", // Gallery images
+        "media", // Media field
       ];
 
       // Try each field systematically
       for (const field of imageFields) {
         if (item[field]) {
-          console.log(`✅ Found potential image in field '${field}':`, item[field]);
-          
+          console.log(
+            `✅ Found potential image in field '${field}':`,
+            item[field]
+          );
+
           if (Array.isArray(item[field])) {
             // Handle array of images - take the first valid one
-            const validImages = item[field].filter(img => 
-              img && 
-              typeof img === 'string' && 
-              img.trim().length > 0 &&
-              (img.startsWith('http') || img.startsWith('data:') || img.startsWith('/'))
+            const validImages = item[field].filter(
+              (img) =>
+                img &&
+                typeof img === "string" &&
+                img.trim().length > 0 &&
+                (img.startsWith("http") ||
+                  img.startsWith("data:") ||
+                  img.startsWith("/"))
             );
-            
+
             if (validImages.length > 0) {
               itemImage = validImages[0];
-              console.log(`📷 Using first image from ${field} array:`, itemImage);
+              console.log(
+                `📷 Using first image from ${field} array:`,
+                itemImage
+              );
               break;
             }
-          } else if (typeof item[field] === 'string') {
+          } else if (typeof item[field] === "string") {
             // Handle string URLs
             const cleanUrl = item[field].trim();
-            if (cleanUrl.length > 0 && (cleanUrl.startsWith('http') || cleanUrl.startsWith('data:') || cleanUrl.startsWith('/'))) {
+            if (
+              cleanUrl.length > 0 &&
+              (cleanUrl.startsWith("http") ||
+                cleanUrl.startsWith("data:") ||
+                cleanUrl.startsWith("/"))
+            ) {
               itemImage = cleanUrl;
               console.log(`📷 Using image from ${field}:`, itemImage);
               break;
             }
-          } else if (typeof item[field] === 'object' && item[field] !== null) {
+          } else if (typeof item[field] === "object" && item[field] !== null) {
             // Handle object with nested image properties
-            const nestedImageFields = ['url', 'src', 'href', 'link'];
+            const nestedImageFields = ["url", "src", "href", "link"];
             for (const nestedField of nestedImageFields) {
-              if (item[field][nestedField] && typeof item[field][nestedField] === 'string') {
+              if (
+                item[field][nestedField] &&
+                typeof item[field][nestedField] === "string"
+              ) {
                 const nestedUrl = item[field][nestedField].trim();
-                if (nestedUrl.length > 0 && (nestedUrl.startsWith('http') || nestedUrl.startsWith('data:') || nestedUrl.startsWith('/'))) {
+                if (
+                  nestedUrl.length > 0 &&
+                  (nestedUrl.startsWith("http") ||
+                    nestedUrl.startsWith("data:") ||
+                    nestedUrl.startsWith("/"))
+                ) {
                   itemImage = nestedUrl;
-                  console.log(`📷 Using nested image from ${field}.${nestedField}:`, itemImage);
+                  console.log(
+                    `📷 Using nested image from ${field}.${nestedField}:`,
+                    itemImage
+                  );
                   break;
                 }
               }
@@ -195,20 +222,23 @@ const Wishlist = () => {
 
       // Final validation and logging
       if (itemImage) {
-        console.log('✅ Final image URL determined:', itemImage);
+        console.log("✅ Final image URL determined:", itemImage);
       } else {
-        console.warn('⚠️ No valid image found for item. Available fields:', Object.keys(item));
-        console.warn('⚠️ Item data for debugging:', item);
+        console.warn(
+          "⚠️ No valid image found for item. Available fields:",
+          Object.keys(item)
+        );
+        console.warn("⚠️ Item data for debugging:", item);
       }
 
       // Create cart item with GUARANTEED image preservation
       const cartItem = {
         productId: item.id,
-        name: item.name || 'Unnamed Product',
-        description: item.description || '',
+        name: item.name || "Unnamed Product",
+        description: item.description || "",
         price: parseFloat(item.price) || 0,
         // CRITICAL: Ensure image is always included, even if null
-        image: itemImage || null, 
+        image: itemImage || null,
         quantity: 1,
         variant: null,
         // Preserve additional fields that might contain images
@@ -218,25 +248,67 @@ const Wishlist = () => {
         // Add multiple image fields for compatibility
         imageUrl: itemImage,
         images: itemImage ? [itemImage] : [],
-        addedFrom: 'wishlist', // Track source
-        addedAt: new Date().toISOString()
+        addedFrom: "wishlist", // Track source
+        addedAt: new Date().toISOString(),
       };
 
-      console.log('🛒 Final cart item being sent:', JSON.stringify(cartItem, null, 2));
+      console.log(
+        "🛒 Final cart item being sent:",
+        JSON.stringify(cartItem, null, 2)
+      );
 
+      // Step 1: Add item to cart
       const success = await addToCart(cartItem);
-      
+
       if (success) {
-        console.log('✅ Item added to cart successfully');
+        console.log("✅ Item added to cart successfully");
+
+        // Step 2: Remove item from wishlist after successful cart addition
+        try {
+          console.log("🗑️ Removing item from wishlist:", item.id);
+          const removeSuccess = await removeFromWishlist(item.id);
+
+          if (removeSuccess) {
+            console.log("✅ Item successfully removed from wishlist");
+            showSuccess(
+              `${item.name || "Item"} moved to cart and removed from wishlist!`
+            );
+
+            // The item will automatically disappear from the page because:
+            // 1. removeFromWishlist updates the wishlist state in useWishlist hook
+            // 2. This triggers a re-render of the Wishlist component
+            // 3. The filtered items list will no longer include this item
+            // 4. The UI will update automatically
+          } else {
+            console.warn(
+              "⚠️ Item added to cart but could not be removed from wishlist"
+            );
+            showWarning(
+              `${
+                item.name || "Item"
+              } added to cart, but could not be removed from wishlist`
+            );
+          }
+        } catch (removeError) {
+          console.error("❌ Error removing item from wishlist:", removeError);
+          showWarning(
+            `${
+              item.name || "Item"
+            } added to cart, but failed to remove from wishlist`
+          );
+        }
+
         return true;
       } else {
-        console.error('❌ Failed to add item to cart');
-        showError(`Failed to add ${item.name || 'item'} to cart`);
+        console.error("❌ Failed to add item to cart");
+        showError(`Failed to add ${item.name || "item"} to cart`);
         return false;
       }
     } catch (error) {
-      console.error('❌ Error adding to cart:', error);
-      showError(`Error adding ${item.name || 'item'} to cart: ${error.message}`);
+      console.error("❌ Error adding to cart:", error);
+      showError(
+        `Error adding ${item.name || "item"} to cart: ${error.message}`
+      );
       return false;
     }
   };
@@ -246,14 +318,17 @@ const Wishlist = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <Navbar />
-        
+
         <div className="pt-8 pb-6 px-6">
           <div className="max-w-7xl mx-auto">
             <div className="animate-pulse">
               <div className="bg-slate-700/50 h-48 rounded-2xl mb-8"></div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {[...Array(8)].map((_, i) => (
-                  <div key={i} className="bg-slate-700/30 h-96 rounded-2xl"></div>
+                  <div
+                    key={i}
+                    className="bg-slate-700/30 h-96 rounded-2xl"
+                  ></div>
                 ))}
               </div>
             </div>
@@ -268,7 +343,7 @@ const Wishlist = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <Navbar />
-        
+
         <div className="pt-12 pb-6 px-6">
           <div className="max-w-7xl mx-auto">
             <div className="text-center py-16">
@@ -292,7 +367,7 @@ const Wishlist = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <Navbar />
-        
+
         <div className="pt-12 pb-6 px-6">
           <div className="max-w-7xl mx-auto">
             <div className="text-center py-16">
@@ -301,7 +376,8 @@ const Wishlist = () => {
                   Customer Profile Required
                 </h2>
                 <p className="text-gray-300 mb-4">
-                  You need to create a customer profile to use the wishlist feature.
+                  You need to create a customer profile to use the wishlist
+                  feature.
                 </p>
                 <p className="text-gray-400 text-sm">
                   Please complete your profile setup to continue.
@@ -317,11 +393,11 @@ const Wishlist = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       <Navbar />
-      
+
       <div className="pt-8 pb-12 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
-            <WishlistHeader 
+            <WishlistHeader
               itemCount={filteredAndSortedItems.length}
               viewMode={viewMode}
               setViewMode={setViewMode}
@@ -336,10 +412,13 @@ const Wishlist = () => {
             {filteredAndSortedItems.length === 0 ? (
               <EmptyWishlist />
             ) : (
-              <div className={viewMode === 'grid' 
-                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" 
-                : "space-y-4"
-              }>
+              <div
+                className={
+                  viewMode === "grid"
+                    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                    : "space-y-4"
+                }
+              >
                 {filteredAndSortedItems.map((item) => (
                   <WishlistItem
                     key={item.id}

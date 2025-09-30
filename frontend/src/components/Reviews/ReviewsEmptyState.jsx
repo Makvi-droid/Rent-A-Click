@@ -14,7 +14,7 @@ const ReviewsEmptyState = ({ type = "no-reviews" }) => {
           description:
             "You haven't completed any rentals yet. Once you complete a rental, you'll be able to write reviews here.",
           actionText: "Browse Products",
-          actionLink: "/products",
+          actionLink: "/productsPage",
         };
 
       case "no-reviews":
@@ -36,7 +36,7 @@ const ReviewsEmptyState = ({ type = "no-reviews" }) => {
           description:
             "Complete rentals and share your experiences with our community of customers.",
           actionText: "Explore Products",
-          actionLink: "/products",
+          actionLink: "/productsPage",
         };
     }
   };

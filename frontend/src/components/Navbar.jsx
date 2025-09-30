@@ -296,7 +296,6 @@ function Navbar() {
                 }}
               >
                 <ShoppingBag className="w-4 h-4" />
-                <span>Cart (3)</span>
               </button>
 
               <button

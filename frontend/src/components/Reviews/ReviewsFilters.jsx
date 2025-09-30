@@ -12,6 +12,7 @@ const ReviewsFilters = ({
   totalResults,
   isVisible,
   stats,
+  viewMode = "all", // "all" or "my"
 }) => {
   const filterOptions = [
     {
@@ -59,6 +60,18 @@ const ReviewsFilters = ({
     { value: "rating-low", label: "Lowest Rating" },
   ];
 
+  const getSearchPlaceholder = () => {
+    return viewMode === "my"
+      ? "Search your reviews by order ID, item name..."
+      : "Search reviews by order ID, item name...";
+  };
+
+  const getFilterTitle = () => {
+    return viewMode === "my"
+      ? "Filter & Search My Reviews"
+      : "Filter & Search All Reviews";
+  };
+
   return (
     <div
       className={`mb-8 transition-all duration-1000 delay-500 ${
@@ -70,13 +83,17 @@ const ReviewsFilters = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
           <div className="flex items-center space-x-2 mb-4 md:mb-0">
             <Filter className="text-blue-400" size={20} />
-            <h3 className="text-white font-semibold">
-              Filter & Search Reviews
-            </h3>
+            <h3 className="text-white font-semibold">{getFilterTitle()}</h3>
+            {viewMode === "my" && (
+              <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full text-xs font-medium">
+                Personal
+              </span>
+            )}
           </div>
 
           <div className="text-gray-400 text-sm">
             Showing {totalResults} review{totalResults !== 1 ? "s" : ""}
+            {viewMode === "my" && " (yours)"}
           </div>
         </div>
 
@@ -89,7 +106,7 @@ const ReviewsFilters = ({
             />
             <input
               type="text"
-              placeholder="Search reviews by order ID, item name..."
+              placeholder={getSearchPlaceholder()}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-gray-700/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
@@ -142,7 +159,7 @@ const ReviewsFilters = ({
 
           {/* Sort Options */}
           <div>
-            <label className="block text-white font-medium mb-3 flex items-center space-x-2">
+            <label className="text-white font-medium mb-3 flex items-center space-x-2">
               <SortAsc size={16} />
               <span>Sort Reviews</span>
             </label>

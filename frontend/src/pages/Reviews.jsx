@@ -29,7 +29,8 @@ const Reviews = () => {
   const [user, authLoading] = useAuthState(auth);
   const [customer, setCustomer] = useState(null);
   const [completedRentals, setCompletedRentals] = useState([]);
-  const [reviews, setReviews] = useState([]);
+  const [allReviews, setAllReviews] = useState([]); // All published reviews
+  const [myReviews, setMyReviews] = useState([]); // Current user's reviews
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -38,6 +39,7 @@ const Reviews = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedRental, setSelectedRental] = useState(null);
+  const [viewMode, setViewMode] = useState("all"); // "all" or "my"
 
   // Animation trigger
   useEffect(() => {
@@ -110,32 +112,93 @@ const Reviews = () => {
     }
   };
 
-  // Fetch completed rentals and reviews
+  // Fetch all reviews and user's specific data
   useEffect(() => {
-    if (!user || !customer || authLoading) return;
+    if (authLoading) return;
 
     const fetchData = async () => {
       try {
         setLoading(true);
 
-        // Fetch completed rentals
-        const rentalsQuery = query(
-          collection(db, "checkouts"),
-          where("userId", "==", user.uid),
-          orderBy("createdAt", "desc")
-        );
-
-        // Fetch reviews
-        const reviewsQuery = query(
+        // Query for ALL published reviews (public)
+        const allReviewsQuery = query(
           collection(db, "reviews"),
-          where("firebaseUid", "==", user.uid), // Changed from customerId to firebaseUid
+          where("status", "==", "published"),
           orderBy("createdAt", "desc")
         );
 
-        // Set up real-time listeners
-        const unsubscribeRentals = onSnapshot(
-          rentalsQuery,
+        // Set up real-time listener for all reviews
+        const unsubscribeAllReviews = onSnapshot(
+          allReviewsQuery,
           (querySnapshot) => {
+            const reviews = [];
+
+            querySnapshot.forEach((doc) => {
+              const reviewData = doc.data();
+              reviews.push({
+                id: doc.id,
+                ...reviewData,
+                createdAt:
+                  convertFirebaseTimestamp(reviewData.createdAt) || new Date(),
+                updatedAt:
+                  convertFirebaseTimestamp(reviewData.updatedAt) || new Date(),
+              });
+            });
+
+            setAllReviews(reviews);
+            setLoading(false);
+            setError(null);
+          },
+          (err) => {
+            console.error("Error fetching all reviews:", err);
+            setError("Failed to load reviews.");
+            setLoading(false);
+          }
+        );
+
+        // If user is authenticated, also fetch their personal data
+        let unsubscribeUserReviews = () => {};
+        let unsubscribeRentals = () => {};
+
+        if (user && customer) {
+          // Fetch user's personal reviews (including unpublished ones)
+          const userReviewsQuery = query(
+            collection(db, "reviews"),
+            where("firebaseUid", "==", user.uid),
+            orderBy("createdAt", "desc")
+          );
+
+          unsubscribeUserReviews = onSnapshot(
+            userReviewsQuery,
+            (querySnapshot) => {
+              const userReviews = [];
+
+              querySnapshot.forEach((doc) => {
+                const reviewData = doc.data();
+                userReviews.push({
+                  id: doc.id,
+                  ...reviewData,
+                  createdAt:
+                    convertFirebaseTimestamp(reviewData.createdAt) ||
+                    new Date(),
+                  updatedAt:
+                    convertFirebaseTimestamp(reviewData.updatedAt) ||
+                    new Date(),
+                });
+              });
+
+              setMyReviews(userReviews);
+            }
+          );
+
+          // Fetch user's completed rentals
+          const rentalsQuery = query(
+            collection(db, "checkouts"),
+            where("userId", "==", user.uid),
+            orderBy("createdAt", "desc")
+          );
+
+          unsubscribeRentals = onSnapshot(rentalsQuery, (querySnapshot) => {
             const rentals = [];
             const currentDate = new Date();
 
@@ -171,45 +234,14 @@ const Reviews = () => {
             });
 
             setCompletedRentals(rentals);
-          },
-          (err) => {
-            console.error("Error fetching rentals:", err);
-            setError("Failed to load your rental history.");
-          }
-        );
-
-        const unsubscribeReviews = onSnapshot(
-          reviewsQuery,
-          (querySnapshot) => {
-            const userReviews = [];
-
-            querySnapshot.forEach((doc) => {
-              const reviewData = doc.data();
-              userReviews.push({
-                id: doc.id,
-                ...reviewData,
-                createdAt:
-                  convertFirebaseTimestamp(reviewData.createdAt) || new Date(),
-                updatedAt:
-                  convertFirebaseTimestamp(reviewData.updatedAt) || new Date(),
-              });
-            });
-
-            setReviews(userReviews);
-            setLoading(false);
-            setError(null);
-          },
-          (err) => {
-            console.error("Error fetching reviews:", err);
-            setError("Failed to load your reviews.");
-            setLoading(false);
-          }
-        );
+          });
+        }
 
         // Return cleanup functions
         return () => {
+          unsubscribeAllReviews();
+          unsubscribeUserReviews();
           unsubscribeRentals();
-          unsubscribeReviews();
         };
       } catch (err) {
         console.error("Error setting up listeners:", err);
@@ -223,15 +255,20 @@ const Reviews = () => {
 
   // Get rentals that don't have reviews yet
   const getRentalsWithoutReviews = () => {
-    const reviewedRentalIds = reviews.map((review) => review.rentalId);
+    const reviewedRentalIds = myReviews.map((review) => review.rentalId);
     return completedRentals.filter(
       (rental) => !reviewedRentalIds.includes(rental.id)
     );
   };
 
+  // Get the current reviews to display based on view mode
+  const getCurrentReviews = () => {
+    return viewMode === "my" ? myReviews : allReviews;
+  };
+
   // Filter and sort reviews
   const getFilteredAndSortedReviews = () => {
-    let filteredReviews = [...reviews];
+    let filteredReviews = [...getCurrentReviews()];
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -273,23 +310,24 @@ const Reviews = () => {
 
   const filteredReviews = getFilteredAndSortedReviews();
   const rentalsWithoutReviews = getRentalsWithoutReviews();
+  const currentReviews = getCurrentReviews();
 
-  // Calculate stats
+  // Calculate stats based on current view mode
   const stats = {
-    totalReviews: reviews.length,
+    totalReviews: currentReviews.length,
     averageRating:
-      reviews.length > 0
+      currentReviews.length > 0
         ? (
-            reviews.reduce((sum, review) => sum + review.rating, 0) /
-            reviews.length
+            currentReviews.reduce((sum, review) => sum + review.rating, 0) /
+            currentReviews.length
           ).toFixed(1)
         : 0,
-    pendingReviews: rentalsWithoutReviews.length,
-    fiveStars: reviews.filter((review) => review.rating === 5).length,
-    fourStars: reviews.filter((review) => review.rating === 4).length,
-    threeStars: reviews.filter((review) => review.rating === 3).length,
-    twoStars: reviews.filter((review) => review.rating === 2).length,
-    oneStar: reviews.filter((review) => review.rating === 1).length,
+    pendingReviews: viewMode === "my" ? rentalsWithoutReviews.length : 0,
+    fiveStars: currentReviews.filter((review) => review.rating === 5).length,
+    fourStars: currentReviews.filter((review) => review.rating === 4).length,
+    threeStars: currentReviews.filter((review) => review.rating === 3).length,
+    twoStars: currentReviews.filter((review) => review.rating === 2).length,
+    oneStar: currentReviews.filter((review) => review.rating === 1).length,
   };
 
   // Handle opening review modal
@@ -309,11 +347,6 @@ const Reviews = () => {
     return <ReviewsLoadingState />;
   }
 
-  // Show auth required if user is not authenticated
-  if (!user) {
-    return <ReviewsAuthRequired />;
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden">
       <Navbar />
@@ -326,6 +359,46 @@ const Reviews = () => {
           customer={customer}
           stats={stats}
         />
+
+        {/* View Mode Toggle */}
+        <div
+          className={`mb-8 transition-all duration-1000 delay-200 ${
+            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+          }`}
+        >
+          <div className="bg-gray-800/30 backdrop-blur-lg border border-gray-700/50 rounded-xl p-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center space-x-2">
+                <h3 className="text-white font-medium">View Reviews:</h3>
+              </div>
+
+              <div className="flex bg-gray-700/50 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode("all")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    viewMode === "all"
+                      ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                      : "text-gray-300 hover:text-white"
+                  }`}
+                >
+                  All Reviews ({allReviews.length})
+                </button>
+                {user && (
+                  <button
+                    onClick={() => setViewMode("my")}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      viewMode === "my"
+                        ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                        : "text-gray-300 hover:text-white"
+                    }`}
+                  >
+                    My Reviews ({myReviews.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Stats Overview */}
         <ReviewsStats stats={stats} isVisible={isVisible} />
@@ -349,96 +422,109 @@ const Reviews = () => {
           </div>
         )}
 
-        {/* Show empty state if no reviews and no completed rentals */}
+        {/* Show auth required message for "My Reviews" when not logged in */}
+        {!user && viewMode === "my" && <ReviewsAuthRequired />}
+
+        {/* Show empty state if no reviews */}
         {!loading &&
           !error &&
-          reviews.length === 0 &&
-          completedRentals.length === 0 && (
-            <ReviewsEmptyState type="no-rentals" />
+          currentReviews.length === 0 &&
+          (viewMode === "all" || (viewMode === "my" && user)) && (
+            <ReviewsEmptyState
+              type={
+                viewMode === "my" && completedRentals.length === 0
+                  ? "no-rentals"
+                  : "no-reviews"
+              }
+            />
           )}
 
-        {/* Show pending reviews if there are completed rentals without reviews */}
-        {!loading && !error && rentalsWithoutReviews.length > 0 && (
-          <div
-            className={`transition-all duration-1000 ${
-              isVisible
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 translate-y-8"
-            }`}
-          >
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6 mb-8">
-              <h3 className="text-blue-400 text-lg font-semibold mb-4">
-                📝 Write Reviews for Completed Rentals
-              </h3>
-              <div className="grid gap-4">
-                {rentalsWithoutReviews.slice(0, 3).map((rental) => (
-                  <div
-                    key={rental.id}
-                    className="bg-gray-800/50 rounded-lg p-4 flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="text-gray-300 font-medium">
-                        Order #{rental.id}
-                      </p>
-                      <p className="text-gray-400 text-sm">
-                        {rental.items?.length || 0} item(s) • Completed{" "}
-                        {new Date(
-                          rental.endDate || rental.createdAt
-                        ).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleWriteReview(rental)}
-                      className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Write Review
-                    </button>
-                  </div>
-                ))}
-                {rentalsWithoutReviews.length > 3 && (
-                  <p className="text-gray-400 text-sm text-center">
-                    +{rentalsWithoutReviews.length - 3} more completed rentals
-                    waiting for reviews
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Show reviews section if there are any reviews */}
-        {!loading && !error && reviews.length > 0 && (
-          <>
-            {/* Filters and Search */}
-            <ReviewsFilters
-              activeFilter={activeFilter}
-              setActiveFilter={setActiveFilter}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              totalResults={filteredReviews.length}
-              isVisible={isVisible}
-              stats={stats}
-            />
-
-            {/* Reviews List */}
-            <ReviewsList reviews={filteredReviews} isVisible={isVisible} />
-          </>
-        )}
-
-        {/* Show empty state if no reviews but has completed rentals */}
+        {/* Show pending reviews if there are completed rentals without reviews (only in "my" view) */}
         {!loading &&
           !error &&
-          reviews.length === 0 &&
-          completedRentals.length > 0 &&
-          rentalsWithoutReviews.length === 0 && (
-            <ReviewsEmptyState type="no-reviews" />
+          user &&
+          viewMode === "my" &&
+          rentalsWithoutReviews.length > 0 && (
+            <div
+              className={`transition-all duration-1000 ${
+                isVisible
+                  ? "opacity-100 translate-y-0"
+                  : "opacity-0 translate-y-8"
+              }`}
+            >
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6 mb-8">
+                <h3 className="text-blue-400 text-lg font-semibold mb-4">
+                  📝 Write Reviews for Completed Rentals
+                </h3>
+                <div className="grid gap-4">
+                  {rentalsWithoutReviews.slice(0, 3).map((rental) => (
+                    <div
+                      key={rental.id}
+                      className="bg-gray-800/50 rounded-lg p-4 flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="text-gray-300 font-medium">
+                          Order #{rental.id}
+                        </p>
+                        <p className="text-gray-400 text-sm">
+                          {rental.items?.length || 0} item(s) • Completed{" "}
+                          {new Date(
+                            rental.endDate || rental.createdAt
+                          ).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleWriteReview(rental)}
+                        className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-4 py-2 rounded-lg transition-colors"
+                      >
+                        Write Review
+                      </button>
+                    </div>
+                  ))}
+                  {rentalsWithoutReviews.length > 3 && (
+                    <p className="text-gray-400 text-sm text-center">
+                      +{rentalsWithoutReviews.length - 3} more completed rentals
+                      waiting for reviews
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+        {/* Show reviews section if there are any reviews */}
+        {!loading &&
+          !error &&
+          currentReviews.length > 0 &&
+          (viewMode === "all" || user) && (
+            <>
+              {/* Filters and Search */}
+              <ReviewsFilters
+                activeFilter={activeFilter}
+                setActiveFilter={setActiveFilter}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                totalResults={filteredReviews.length}
+                isVisible={isVisible}
+                stats={stats}
+                viewMode={viewMode}
+              />
+
+              {/* Reviews List */}
+              <ReviewsList
+                reviews={filteredReviews}
+                isVisible={isVisible}
+                viewMode={viewMode}
+                currentUser={user}
+              />
+            </>
           )}
       </div>
 
-      {/* Review Modal */}
-      {showReviewModal && selectedRental && customer && (
+      {/* Review Modal - only show if user is authenticated */}
+      {showReviewModal && selectedRental && customer && user && (
         <ReviewModal
           rental={selectedRental}
           customer={customer}

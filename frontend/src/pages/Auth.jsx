@@ -1,16 +1,17 @@
-import { useRef, useEffect } from 'react';
-import AuthToggle from '../components/Authentication/AuthToggle';
-import BackButton from '../components/Authentication/BackButton';
-import BackgroundElements from '../components/Authentication/BackgroundElements';
-import FormFooter from '../components/Authentication/FormFooter';
-import FormHeader from '../components/Authentication/FormHeader';
-import ImageSection from '../components/Authentication/ImageSection';
-import AuthForm from '../components/Authentication/AuthForm';
-import GoogleSSO from '../components/Authentication/GoogleSSO';
-import NotificationBar from '../components/Authentication/NotificationBar';
-import UseAuthState from '../hooks/UseAuthState';
-import UseAuthValidation from '../hooks/UseAuthValidation';
-import UseAuthActions from '../hooks/UseAuthActions';
+import { useRef, useEffect } from "react";
+import AuthToggle from "../components/Authentication/AuthToggle";
+import BackButton from "../components/Authentication/BackButton";
+import BackgroundElements from "../components/Authentication/BackgroundElements";
+import FormFooter from "../components/Authentication/FormFooter";
+import FormHeader from "../components/Authentication/FormHeader";
+import ImageSection from "../components/Authentication/ImageSection";
+import AuthForm from "../components/Authentication/AuthForm";
+import GoogleSSO from "../components/Authentication/GoogleSSO";
+import NotificationBar from "../components/Authentication/NotificationBar";
+import TwoFactorModal from "../components/Authentication/TwoFactorModal"; // NEW
+import UseAuthState from "../hooks/UseAuthState";
+import UseAuthValidation from "../hooks/UseAuthValidation";
+import UseAuthActions from "../hooks/UseAuthActions";
 
 function Auth() {
   const recaptchaRef = useRef();
@@ -37,16 +38,36 @@ function Auth() {
     setLockoutTimeRemaining,
     setEmailVerificationSent,
     setIsLoading,
-    toggleMode
+    toggleMode,
   } = UseAuthState();
 
-  const { validateForm } = UseAuthValidation(formData, isSignUp, isAccountLocked, lockoutTimeRemaining);
+  const { validateForm } = UseAuthValidation(
+    formData,
+    isSignUp,
+    isAccountLocked,
+    lockoutTimeRemaining
+  );
 
   const {
     handleInputChange,
     handleRecaptchaChange,
     handleGoogleSSO,
-    handleSubmit
+    handleSubmit,
+    showConfirmModal,
+    setShowConfirmModal,
+    pendingEmailData,
+    handleExistingEmailConfirmation,
+    checkEmailExists,
+    // NEW: 2FA related
+    show2FAModal,
+    setShow2FAModal,
+    twoFactorCode,
+    setTwoFactorCode,
+    twoFactorError,
+    setTwoFactorError,
+    handle2FASubmit,
+    resend2FACode,
+    resendCooldown,
   } = UseAuthActions({
     formData,
     setFormData,
@@ -61,7 +82,7 @@ function Auth() {
     setLockoutTimeRemaining,
     setEmailVerificationSent,
     setIsLoading,
-    recaptchaRef // Pass recaptchaRef to actions hook
+    recaptchaRef, // Pass recaptchaRef to actions hook
   });
 
   // Clear form errors when switching between login/signup modes
@@ -75,11 +96,11 @@ function Auth() {
 
   // Clear sensitive form data when switching modes (optional security measure)
   useEffect(() => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      password: '',
-      confirmPassword: '',
-      recaptchaToken: null
+      password: "",
+      confirmPassword: "",
+      recaptchaToken: null,
     }));
   }, [isSignUp, setFormData]);
 
@@ -90,6 +111,14 @@ function Auth() {
     }
   }, [isSignUp, setShowConfirmPassword]);
 
+  // NEW: Handle 2FA modal close
+  const handle2FAClose = () => {
+    setShow2FAModal(false);
+    setTwoFactorCode("");
+    setTwoFactorError("");
+    setIsLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
       <BackgroundElements />
@@ -97,31 +126,29 @@ function Auth() {
       <div className="w-full max-w-6xl mx-auto relative z-10">
         <div className="bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 overflow-hidden">
           <div className="grid lg:grid-cols-2 min-h-[600px]">
-            
             <ImageSection isSignUp={isSignUp} />
 
             {/* Form Section */}
             <div className="p-8 lg:p-12 flex flex-col justify-center relative">
               <div className="w-full max-w-md mx-auto">
-
                 <BackButton />
-                
-                <AuthToggle 
-                  isSignUp={isSignUp} 
+
+                <AuthToggle
+                  isSignUp={isSignUp}
                   toggleMode={toggleMode}
                   isLoading={isLoading} // Disable toggle during loading
                 />
 
                 <FormHeader isSignUp={isSignUp} />
 
-                <NotificationBar 
+                <NotificationBar
                   isAccountLocked={isAccountLocked}
                   lockoutTimeRemaining={lockoutTimeRemaining}
                   emailVerificationSent={emailVerificationSent}
                   isSignUp={isSignUp}
                 />
 
-                <GoogleSSO 
+                <GoogleSSO
                   onGoogleSSO={handleGoogleSSO}
                   isLoading={isLoading}
                   isAccountLocked={isAccountLocked}
@@ -132,7 +159,7 @@ function Auth() {
                   isSignUp={isSignUp}
                   formData={formData}
                   errors={errors}
-                  setErrors={setErrors} 
+                  setErrors={setErrors}
                   isLoading={isLoading}
                   isAccountLocked={isAccountLocked}
                   showPassword={showPassword}
@@ -141,16 +168,18 @@ function Auth() {
                   recaptchaRef={recaptchaRef}
                   onInputChange={handleInputChange}
                   onRecaptchaChange={handleRecaptchaChange}
-                  onTogglePassword={() => setShowPassword(prev => !prev)}
-                  onToggleConfirmPassword={() => setShowConfirmPassword(prev => !prev)}
+                  onTogglePassword={() => setShowPassword((prev) => !prev)}
+                  onToggleConfirmPassword={() =>
+                    setShowConfirmPassword((prev) => !prev)
+                  }
                   onSubmit={handleSubmit}
                 />
 
-                <FormFooter 
-                  isSignUp={isSignUp} 
+                <FormFooter
+                  isSignUp={isSignUp}
                   onForgotPassword={() => {
                     // Handle forgot password logic here
-                    console.log('Forgot password clicked');
+                    console.log("Forgot password clicked");
                     // You could add a modal or redirect to forgot password page
                   }}
                 />
@@ -159,6 +188,19 @@ function Auth() {
           </div>
         </div>
       </div>
+
+      {/* NEW: Two-Factor Authentication Modal */}
+      <TwoFactorModal
+        isOpen={show2FAModal}
+        onClose={handle2FAClose}
+        onSubmit={handle2FASubmit}
+        onResend={resend2FACode}
+        twoFactorCode={twoFactorCode}
+        setTwoFactorCode={setTwoFactorCode}
+        error={twoFactorError}
+        isLoading={isLoading}
+        resendCooldown={resendCooldown}
+      />
     </div>
   );
 }
