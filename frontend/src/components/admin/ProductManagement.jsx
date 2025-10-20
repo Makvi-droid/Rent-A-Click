@@ -1,37 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  collection, 
-  getDocs, 
-  deleteDoc, 
-  doc, 
-  query, 
+import React, { useState, useEffect } from "react";
+import {
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  query,
   orderBy,
   addDoc,
   updateDoc,
   serverTimestamp,
-  setDoc
-} from 'firebase/firestore';
-import { firestore } from '../../firebase';
-import ProductCard from '../../admin/ProductsManagement/ProductCard';
-import ProductModal from '../../admin/ProductsManagement/ProductModal';
-import FilterControls from '../../admin/ProductsManagement/FilterControls';
-import { Plus, Package, AlertCircle } from 'lucide-react';
+  setDoc,
+} from "firebase/firestore";
+import { firestore } from "../../firebase";
+import ProductCard from "../../admin/ProductsManagement/ProductCard";
+import ProductModal from "../../admin/ProductsManagement/ProductModal";
+import FilterControls from "../../admin/ProductsManagement/FilterControls";
+import { Plus, Package, AlertCircle } from "lucide-react";
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
   const [inventoryProducts, setInventoryProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  
+
   // Filter states
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedSubCategory, setSelectedSubCategory] = useState('All');
-  const [selectedStatus, setSelectedStatus] = useState('All');
-  const [selectedApproval, setSelectedApproval] = useState('All');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedSubCategory, setSelectedSubCategory] = useState("All");
+  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [selectedApproval, setSelectedApproval] = useState("All");
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -39,33 +39,40 @@ const ProductManagement = () => {
 
   useEffect(() => {
     filterProducts();
-  }, [products, selectedCategory, selectedSubCategory, selectedStatus, selectedApproval, searchTerm]);
+  }, [
+    products,
+    selectedCategory,
+    selectedSubCategory,
+    selectedStatus,
+    selectedApproval,
+    searchTerm,
+  ]);
 
   // Generate incremental ID for products
   const generateProductId = async () => {
     try {
-      const productsRef = collection(firestore, 'products');
-      const q = query(productsRef, orderBy('id', 'desc'));
+      const productsRef = collection(firestore, "products");
+      const q = query(productsRef, orderBy("id", "desc"));
       const snapshot = await getDocs(q);
-      
+
       if (snapshot.empty) {
-        return 'RACPM0001';
+        return "RACPM0001";
       }
-      
+
       const lastDoc = snapshot.docs[0];
       const lastId = lastDoc.data().id;
-      
+
       // Extract numeric part and increment
       const match = lastId.match(/RACPM(\d+)/);
       if (match) {
         const numericPart = parseInt(match[1]) + 1;
-        return `RACPM${numericPart.toString().padStart(4, '0')}`;
+        return `RACPM${numericPart.toString().padStart(4, "0")}`;
       } else {
         // Fallback if format doesn't match
-        return 'RACPM0001';
+        return "RACPM0001";
       }
     } catch (err) {
-      console.error('Error generating product ID:', err);
+      console.error("Error generating product ID:", err);
       // Fallback ID generation
       const timestamp = Date.now().toString().slice(-4);
       return `RACPM${timestamp}`;
@@ -75,168 +82,182 @@ const ProductManagement = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch products
-      const productsCollection = collection(firestore, 'products');
+      const productsCollection = collection(firestore, "products");
       const productsSnapshot = await getDocs(productsCollection);
-      const productsList = productsSnapshot.docs.map(doc => ({
+      const productsList = productsSnapshot.docs.map((doc) => ({
         firestoreId: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
-      
+
       // Fetch inventory
-      const inventoryCollection = collection(firestore, 'inventory');
+      const inventoryCollection = collection(firestore, "inventory");
       const inventorySnapshot = await getDocs(inventoryCollection);
-      const inventoryList = inventorySnapshot.docs.map(doc => ({
+      const inventoryList = inventorySnapshot.docs.map((doc) => ({
         firestoreId: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
-      
+
       setProducts(productsList);
       setInventoryProducts(inventoryList);
-      setError('');
+      setError("");
     } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Failed to fetch data. Please try again.');
+      console.error("Error fetching data:", err);
+      setError("Failed to fetch data. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const filterProducts = () => {
-    let filtered = products.filter(product => {
-      const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
-      const matchesSubCategory = selectedSubCategory === 'All' || product.subCategory === selectedSubCategory;
-      const matchesStatus = selectedStatus === 'All' || product.status === selectedStatus;
-      
-      const matchesApproval = selectedApproval === 'All' || 
-        (selectedApproval === 'approved' && product.approved) ||
-        (selectedApproval === 'pending' && !product.approved);
-      
-      const matchesSearch = searchTerm === '' || 
+    let filtered = products.filter((product) => {
+      const matchesCategory =
+        selectedCategory === "All" || product.category === selectedCategory;
+      const matchesSubCategory =
+        selectedSubCategory === "All" ||
+        product.subCategory === selectedSubCategory;
+      const matchesStatus =
+        selectedStatus === "All" || product.status === selectedStatus;
+
+      const matchesApproval =
+        selectedApproval === "All" ||
+        (selectedApproval === "approved" && product.approved) ||
+        (selectedApproval === "pending" && !product.approved);
+
+      const matchesSearch =
+        searchTerm === "" ||
         product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.id?.toLowerCase().includes(searchTerm.toLowerCase());
 
-      return matchesCategory && matchesSubCategory && matchesStatus && matchesApproval && matchesSearch;
+      return (
+        matchesCategory &&
+        matchesSubCategory &&
+        matchesStatus &&
+        matchesApproval &&
+        matchesSearch
+      );
     });
     setFilteredProducts(filtered);
   };
 
   // In your ProductManagement.js file, update the handleAddProduct function:
 
-const handleAddProduct = async (productData) => {
-  try {
-    setError('');
-    
-    // Validate required fields
-    if (!productData.inventoryId) {
-      throw new Error('Please select an inventory item');
-    }
-    
-    const inventoryItem = inventoryProducts.find(item => item.id === productData.inventoryId);
-    if (!inventoryItem) {
-      throw new Error('Selected inventory item not found');
-    }
+  const handleAddProduct = async (productData) => {
+    try {
+      setError("");
 
-    const productId = await generateProductId();
-    
-    // Create new product with data from inventory
-    const newProduct = {
-      id: productId,
-      inventoryId: inventoryItem.id,
-      name: productData.name || `Product ${productId}`,
-      brand: productData.brand || 'No Brand',
-      category: inventoryItem.category,
-      subCategory: productData.subCategory || '',
-      description: productData.description || '',
-      price: parseFloat(productData.price) || 0,
-      status: productData.status || 'active',
-      approved: productData.approved || false,
-      imageUrl: productData.imageUrl || inventoryItem.image || '', // ← Changed from 'image' to 'imageUrl'
-      stock: inventoryItem.stock, // Read-only from inventory
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
+      // Validate required fields
+      if (!productData.inventoryId) {
+        throw new Error("Please select an inventory item");
+      }
 
-    console.log('Adding product to Firestore:', newProduct);
-    
-    // Use setDoc with custom document ID
-    const docRef = doc(collection(firestore, 'products'), productId);
-    await setDoc(docRef, newProduct);
-    console.log('Product added successfully with custom ID:', productId);
-    
-    // Refresh data
-    await fetchData();
-    
-    return { success: true, id: productId };
-  } catch (err) {
-    console.error('Error adding product:', err);
-    const errorMessage = err.message || 'Failed to add product';
-    setError(errorMessage);
-    throw new Error(errorMessage);
-  }
-};
+      const inventoryItem = inventoryProducts.find(
+        (item) => item.id === productData.inventoryId
+      );
+      if (!inventoryItem) {
+        throw new Error("Selected inventory item not found");
+      }
+
+      const productId = await generateProductId();
+
+      // Create new product with data from inventory
+      const newProduct = {
+        id: productId,
+        inventoryId: inventoryItem.id,
+        name: productData.name || `Product ${productId}`,
+        brand: productData.brand || "No Brand",
+        category: inventoryItem.category,
+        subCategory: productData.subCategory || "",
+        description: productData.description || "",
+        price: parseFloat(productData.price) || 0,
+        status: productData.status || "active",
+        approved: productData.approved || false,
+        featured: productData.featured || false, // ADD THIS LINE
+        imageUrl: productData.imageUrl || inventoryItem.image || "",
+        stock: inventoryItem.stock,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      console.log("Adding product to Firestore:", newProduct);
+
+      // Use setDoc with custom document ID
+      const docRef = doc(collection(firestore, "products"), productId);
+      await setDoc(docRef, newProduct);
+      console.log("Product added successfully with custom ID:", productId);
+
+      // Refresh data
+      await fetchData();
+
+      return { success: true, id: productId };
+    } catch (err) {
+      console.error("Error adding product:", err);
+      const errorMessage = err.message || "Failed to add product";
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
 
   const handleUpdateProduct = async (firestoreId, updates) => {
     try {
-      setError('');
-      
+      setError("");
+
       if (!firestoreId) {
-        throw new Error('Product ID is required for update');
+        throw new Error("Product ID is required for update");
       }
 
-      const productRef = doc(firestore, 'products', firestoreId);
+      const productRef = doc(firestore, "products", firestoreId);
       const updateData = {
         ...updates,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       };
 
       // Don't allow stock updates (read-only from inventory)
       delete updateData.stock;
-      
+
       // Ensure price is a number
       if (updateData.price !== undefined) {
         updateData.price = parseFloat(updateData.price) || 0;
       }
 
-      console.log('Updating product:', firestoreId, updateData);
-      
+      console.log("Updating product:", firestoreId, updateData);
+
       await updateDoc(productRef, updateData);
-      console.log('Product updated successfully');
-      
+      console.log("Product updated successfully");
+
       // Refresh data
       await fetchData();
-      
+
       return { success: true };
     } catch (err) {
-      console.error('Error updating product:', err);
-      const errorMessage = err.message || 'Failed to update product';
+      console.error("Error updating product:", err);
+      const errorMessage = err.message || "Failed to update product";
       setError(errorMessage);
       throw new Error(errorMessage);
     }
   };
 
   const handleDeleteProduct = async (firestoreId) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
+    if (window.confirm("Are you sure you want to delete this product?")) {
       try {
-        setError('');
-        
+        setError("");
+
         if (!firestoreId) {
-          throw new Error('Product ID is required for deletion');
+          throw new Error("Product ID is required for deletion");
         }
 
-        console.log('Deleting product:', firestoreId);
-        
-        await deleteDoc(doc(firestore, 'products', firestoreId));
-        console.log('Product deleted successfully');
-        
+        console.log("Deleting product:", firestoreId);
+
+        await deleteDoc(doc(firestore, "products", firestoreId));
+        console.log("Product deleted successfully");
+
         // Refresh data
         await fetchData();
-        
       } catch (err) {
-        console.error('Error deleting product:', err);
-        setError('Failed to delete product. Please try again.');
+        console.error("Error deleting product:", err);
+        setError("Failed to delete product. Please try again.");
       }
     }
   };
@@ -254,19 +275,23 @@ const handleAddProduct = async (productData) => {
 
   // Get updated stock from inventory for products
   const getProductsWithUpdatedStock = () => {
-    return filteredProducts.map(product => {
-      const inventoryItem = inventoryProducts.find(item => item.id === product.inventoryId);
+    return filteredProducts.map((product) => {
+      const inventoryItem = inventoryProducts.find(
+        (item) => item.id === product.inventoryId
+      );
       return {
         ...product,
-        stock: inventoryItem ? inventoryItem.stock : product.stock || 0
+        stock: inventoryItem ? inventoryItem.stock : product.stock || 0,
       };
     });
   };
 
   const productsWithStock = getProductsWithUpdatedStock();
   const totalProducts = products.length;
-  const approvedProducts = products.filter(p => p.approved).length;
-  const outOfStockProducts = productsWithStock.filter(p => p.stock === 0).length;
+  const approvedProducts = products.filter((p) => p.approved).length;
+  const outOfStockProducts = productsWithStock.filter(
+    (p) => p.stock === 0
+  ).length;
 
   if (loading) {
     return (
@@ -287,7 +312,9 @@ const handleAddProduct = async (productData) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Package className="w-8 h-8 text-white" />
-              <h1 className="text-3xl font-bold text-white">Product Management</h1>
+              <h1 className="text-3xl font-bold text-white">
+                Product Management
+              </h1>
             </div>
             <button
               onClick={() => setShowModal(true)}
@@ -304,7 +331,9 @@ const handleAddProduct = async (productData) => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-white/80 text-sm">Total Products</p>
-                  <p className="text-2xl font-bold text-white">{totalProducts}</p>
+                  <p className="text-2xl font-bold text-white">
+                    {totalProducts}
+                  </p>
                 </div>
                 <Package className="w-8 h-8 text-blue-400" />
               </div>
@@ -313,7 +342,9 @@ const handleAddProduct = async (productData) => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-white/80 text-sm">Live Products</p>
-                  <p className="text-2xl font-bold text-white">{approvedProducts}</p>
+                  <p className="text-2xl font-bold text-white">
+                    {approvedProducts}
+                  </p>
                 </div>
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-bold">✓</span>
@@ -324,7 +355,9 @@ const handleAddProduct = async (productData) => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-white/80 text-sm">Out of Stock</p>
-                  <p className="text-2xl font-bold text-white">{outOfStockProducts}</p>
+                  <p className="text-2xl font-bold text-white">
+                    {outOfStockProducts}
+                  </p>
                 </div>
                 <AlertCircle className="w-8 h-8 text-red-400" />
               </div>
@@ -368,13 +401,12 @@ const handleAddProduct = async (productData) => {
               <Package className="w-12 h-12 text-white/60" />
             </div>
             <h3 className="text-xl font-semibold text-white mb-2">
-              {products.length === 0 ? 'No products yet' : 'No products found'}
+              {products.length === 0 ? "No products yet" : "No products found"}
             </h3>
             <p className="text-white/60 mb-4">
-              {products.length === 0 
-                ? 'Start by adding your first product from inventory' 
-                : 'Try adjusting your filters or search terms'
-              }
+              {products.length === 0
+                ? "Start by adding your first product from inventory"
+                : "Try adjusting your filters or search terms"}
             </p>
             {products.length === 0 && inventoryProducts.length > 0 && (
               <button

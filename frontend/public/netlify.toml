@@ -1,4 +1,10 @@
 [[redirects]]
 from="/*"
-to="index.html"
+to="/index.html"
 status=200
+
+[build]
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"

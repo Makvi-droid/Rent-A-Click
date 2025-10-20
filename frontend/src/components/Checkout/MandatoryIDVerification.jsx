@@ -5,10 +5,10 @@ import IDSubmissionCard from "./IDSubmissionCard";
 import IDVerificationStatus from "./IDVerificationStatus";
 import IDRequirementNotice from "./IDRequirementNotice";
 
-const MandatoryIDVerification = ({ 
-  formData, 
-  errors, 
-  onGoogleFormSubmission 
+const MandatoryIDVerification = ({
+  formData,
+  errors,
+  onGoogleFormSubmission,
 }) => {
   return (
     <div className="bg-gradient-to-r from-red-500/10 via-orange-500/10 to-yellow-500/10 border border-red-500/30 rounded-xl p-6 mb-8">
@@ -24,7 +24,7 @@ const MandatoryIDVerification = ({
             </div>
           )}
         </div>
-        
+
         <div className="flex-1 space-y-4">
           <div>
             <div className="flex items-center space-x-3 mb-2">
@@ -40,17 +40,18 @@ const MandatoryIDVerification = ({
                 </span>
               )}
             </div>
-            
+
             <p className="text-gray-300 text-sm mb-4">
-              <strong>All equipment rentals require ID verification.</strong> This security measure protects both our equipment and ensures a smooth rental experience.
+              <strong>All equipment rentals require ID verification.</strong>{" "}
+              This security measure protects both our equipment and ensures a
+              smooth rental experience.
             </p>
           </div>
 
           {/* ID Requirements Notice */}
-          <IDRequirementNotice />
 
           {/* ID Verification Status */}
-          <IDVerificationStatus 
+          <IDVerificationStatus
             isSubmitted={formData.idSubmitted}
             hasError={!!errors.idSubmitted}
             errorMessage={errors.idSubmitted}
@@ -58,7 +59,7 @@ const MandatoryIDVerification = ({
 
           {/* ID Submission Card */}
           {!formData.idSubmitted && (
-            <IDSubmissionCard 
+            <IDSubmissionCard
               onSubmit={onGoogleFormSubmission}
               userEmail={formData.email}
             />

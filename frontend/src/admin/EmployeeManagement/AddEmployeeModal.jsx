@@ -45,9 +45,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [sendInvite, setSendInvite] = useState(true);
 
-  // Debug logging
-  console.log("AddEmployeeModal render - isOpen:", isOpen);
-
   const {
     register,
     handleSubmit,
@@ -64,17 +61,13 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
-      console.log("Modal opened, fetching data...");
       fetchRoles();
       fetchEmployees();
-      // Prevent body scroll when modal is open
       document.body.style.overflow = "hidden";
     } else {
-      // Restore body scroll when modal is closed
       document.body.style.overflow = "unset";
     }
 
-    // Cleanup function to restore scroll on unmount
     return () => {
       document.body.style.overflow = "unset";
     };
@@ -88,7 +81,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         ...doc.data(),
       }));
       setRoles(rolesData);
-      console.log("Roles fetched:", rolesData);
     } catch (error) {
       console.error("Error fetching roles:", error);
     }
@@ -102,7 +94,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         ...doc.data(),
       }));
       setEmployees(employeesData);
-      console.log("Employees fetched:", employeesData);
     } catch (error) {
       console.error("Error fetching employees:", error);
     }
@@ -121,7 +112,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
       await updateDoc(counterRef, { count: increment(1) });
       return `EMP${nextId.toString().padStart(4, "0")}`;
     } catch (error) {
-      // If counter doesn't exist, create it
       const counterRef = doc(db, "counters", "employeeId");
       await setDoc(counterRef, { count: 1 });
       return "EMP0001";
@@ -130,7 +120,76 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
   const sendInvitationEmail = async (employeeData) => {
     try {
-      // Create invitation record
+      // Check if running in development mode without Netlify Dev
+      const isDevelopment = import.meta.env.DEV;
+      const isNetlifyDev = window.location.port === "8888";
+
+      if (isDevelopment && !isNetlifyDev) {
+        // Development mode without Netlify - simulate email sending
+        console.log(
+          "📧 Development Mode - Email would be sent to:",
+          employeeData.email
+        );
+        console.log("Employee Data:", employeeData);
+
+        toast.success(
+          `[DEV MODE] Email simulation successful for ${employeeData.email}`,
+          {
+            duration: 4000,
+          }
+        );
+
+        // Still create the invitation record
+        const invitationData = {
+          email: employeeData.email,
+          employeeId: employeeData.employeeId,
+          roleName: roles.find((r) => r.id === employeeData.roleId)?.name,
+          invitedBy: auth.currentUser?.email,
+          invitedAt: new Date(),
+          status: "sent",
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          emailId: "dev-simulation",
+        };
+
+        await addDoc(collection(db, "employeeInvitations"), invitationData);
+
+        await createAuditLog({
+          action: "SEND_INVITATION",
+          targetId: employeeData.employeeId,
+          details: { email: employeeData.email, mode: "development" },
+          timestamp: new Date(),
+        });
+
+        return;
+      }
+
+      // Production or Netlify Dev - actually send email
+      const response = await fetch(
+        "/.netlify/functions/send-employee-invitation",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: employeeData.email,
+            employeeId: employeeData.employeeId,
+            firstName: employeeData.firstName,
+            lastName: employeeData.lastName,
+            roleName: roles.find((r) => r.id === employeeData.roleId)?.name,
+            startDate: employeeData.startDate,
+            invitedBy: auth.currentUser?.email,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to send email");
+      }
+
+      // Create invitation record in Firestore
       const invitationData = {
         email: employeeData.email,
         employeeId: employeeData.employeeId,
@@ -139,23 +198,23 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         invitedAt: new Date(),
         status: "sent",
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        emailId: result.emailId,
       };
 
       await addDoc(collection(db, "employeeInvitations"), invitationData);
 
-      // In a real application, you would integrate with an email service here
-      // For now, we'll just show a success message
-      toast.success(`Invitation email would be sent to ${employeeData.email}`);
+      toast.success(`Invitation email sent to ${employeeData.email}`);
 
       await createAuditLog({
         action: "SEND_INVITATION",
         targetId: employeeData.employeeId,
-        details: { email: employeeData.email },
+        details: { email: employeeData.email, emailId: result.emailId },
         timestamp: new Date(),
       });
     } catch (error) {
       console.error("Error sending invitation:", error);
-      toast.error("Failed to send invitation email");
+      toast.error(`Failed to send invitation: ${error.message}`);
+      throw error; // Re-throw to handle in onSubmit
     }
   };
 
@@ -197,7 +256,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
   };
 
   const handleBackdropClick = (e) => {
-    // Only close if clicking on the backdrop itself, not on child elements
     if (e.target === e.currentTarget) {
       onClose();
     }
@@ -214,13 +272,9 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
     "Customer Service",
   ];
 
-  // Early return with debug info
   if (!isOpen) {
-    console.log("Modal not open, returning null");
     return null;
   }
-
-  console.log("Modal is open, rendering content...");
 
   return (
     <div
@@ -229,16 +283,13 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      {/* Backdrop */}
       <div
         className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
         onClick={handleBackdropClick}
         aria-hidden="true"
       />
 
-      {/* Modal container */}
       <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
-        {/* Modal panel */}
         <div className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
           <div className="flex items-center justify-between mb-6">
             <h3
@@ -259,7 +310,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Personal Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -292,7 +342,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* Contact Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -324,7 +373,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* Work Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -373,7 +421,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* Additional Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -409,7 +456,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* Manager */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Reports To (Manager)
@@ -427,7 +473,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               </select>
             </div>
 
-            {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Notes
@@ -440,7 +485,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               />
             </div>
 
-            {/* Send Invitation */}
             <div className="flex items-center">
               <input
                 type="checkbox"
@@ -453,7 +497,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               </label>
             </div>
 
-            {/* Actions */}
             <div className="flex justify-end space-x-3 pt-6 border-t">
               <button
                 type="button"

@@ -1,9 +1,10 @@
-// checkoutHandlers.js - FIXED: Removed customer collection updates
+// checkoutHandlers.js - FIXED: Added notification creation
 import {
   formatCurrency,
   generateNextCheckoutId,
   saveCheckoutToFirebase,
 } from "../../utils/checkOutUtils";
+import { notifyOrderPlaced } from "../../services/notificationService"; // ⭐ ADD THIS LINE
 
 export const createPayPalHandlers = (
   setPaymentStatus,
@@ -92,9 +93,6 @@ export const createSubmitHandler = (
         submittedAt: new Date().toISOString(),
       };
 
-      // REMOVED: Customer profile update - checkout data stays separate
-      // await updateCustomerProfile(customerDocId, enhancedFormData);
-
       // Generate the checkout ID
       const checkoutId = await generateNextCheckoutId();
       console.log("Generated checkout ID:", checkoutId);
@@ -110,6 +108,24 @@ export const createSubmitHandler = (
         shouldCreateCustomerProfile,
         pricing
       );
+
+      // ⭐⭐⭐ CREATE NOTIFICATION AFTER ORDER IS SAVED ⭐⭐⭐
+      try {
+        console.log(
+          "🔔 Creating order notification for customer:",
+          customerDocId
+        );
+        await notifyOrderPlaced(
+          customerDocId,
+          checkoutId,
+          checkoutId.toUpperCase(),
+          pricing.total
+        );
+        console.log("🔔 Order notification created successfully!");
+      } catch (notificationError) {
+        // Don't fail the order if notification fails, just log it
+        console.error("⚠️ Failed to create notification:", notificationError);
+      }
 
       // Clear the cart
       try {

@@ -1,22 +1,23 @@
-import React, { useState, useRef } from 'react';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { X, Upload, Link, Image, Package } from 'lucide-react';
+import React, { useState, useRef } from "react";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { X, Upload, Link, Image, Package } from "lucide-react";
 
 const ProductModal = ({ product, inventoryProducts = [], onClose, onSave }) => {
   const [formData, setFormData] = useState({
-    name: product?.name || '',
-    brand: product?.brand || '',
-    price: product?.price || '',
-    inventoryId: product?.inventoryId || '',
-    subCategory: product?.subCategory || '',
-    status: product?.status || 'active',
+    name: product?.name || "",
+    brand: product?.brand || "",
+    price: product?.price || "",
+    inventoryId: product?.inventoryId || "",
+    subCategory: product?.subCategory || "",
+    status: product?.status || "active",
     approved: product?.approved || false,
-    imageUrl: product?.imageUrl || '',
-    description: product?.description || ''
+    featured: product?.featured || false,
+    imageUrl: product?.imageUrl || "",
+    description: product?.description || "",
   });
-  
+
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(product?.imageUrl || '');
+  const [imagePreview, setImagePreview] = useState(product?.imageUrl || "");
   const [useImageUrl, setUseImageUrl] = useState(!!product?.imageUrl);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -24,28 +25,30 @@ const ProductModal = ({ product, inventoryProducts = [], onClose, onSave }) => {
   const fileInputRef = useRef(null);
 
   // Get selected inventory item
-  const selectedInventoryItem = inventoryProducts.find(item => item.id === formData.inventoryId);
+  const selectedInventoryItem = inventoryProducts.find(
+    (item) => item.id === formData.inventoryId
+  );
 
   const subCategories = {
-  "digital cameras": ["Mirrorless", "Compact"],
-  "dslr cameras": ["Professional", "Mid-Range", "Entry-Level"],
-  "instant cameras": ["Mini", "Square", "Wide"],
-  "media storage": ["SD Cards", "CFexpress", "Micro SD"],
-  "lenses": ["Prime", "Zoom"]
-};
+    "digital cameras": ["Mirrorless", "Compact"],
+    "dslr cameras": ["Professional", "Mid-Range", "Entry-Level"],
+    "instant cameras": ["Mini", "Square", "Wide"],
+    "media storage": ["SD Cards", "CFexpress", "Micro SD"],
+    lenses: ["Prime", "Zoom"],
+  };
 
-const categoryMap = {
-  "instant-cameras": "instant cameras",
-  "digital-cameras": "digital cameras",
-  "dslr-cameras": "dslr cameras",
-  "media-storage": "media storage",
-  "lenses": "lenses"
-};
+  const categoryMap = {
+    "instant-cameras": "instant cameras",
+    "digital-cameras": "digital cameras",
+    "dslr-cameras": "dslr cameras",
+    "media-storage": "media storage",
+    lenses: "lenses",
+  };
 
   const statusOptions = [
-    { value: 'active', label: 'Active' },
-    { value: 'out of stock', label: 'Out of Stock' },
-    { value: 'discontinued', label: 'Discontinued' }
+    { value: "active", label: "Active" },
+    { value: "out of stock", label: "Out of Stock" },
+    { value: "discontinued", label: "Discontinued" },
   ];
 
   // Get available inventory items (not already used in products)
@@ -59,126 +62,137 @@ const categoryMap = {
   };
 
   // Group inventory items by category
-  const groupedInventoryItems = getAvailableInventoryItems().reduce((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = [];
-    }
-    acc[item.category].push(item);
-    return acc;
-  }, {});
+  const groupedInventoryItems = getAvailableInventoryItems().reduce(
+    (acc, item) => {
+      if (!acc[item.category]) {
+        acc[item.category] = [];
+      }
+      acc[item.category].push(item);
+      return acc;
+    },
+    {}
+  );
 
   // Get available sub-categories for selected inventory item's category
   const getAvailableSubCategories = () => {
-  if (!selectedInventoryItem || !selectedInventoryItem.category) return [];
-  
-  const key = selectedInventoryItem.category.trim().toLowerCase();
-  const mappedKey = categoryMap[key] || key;
-  
-  return subCategories[mappedKey] || [];
-};
+    if (!selectedInventoryItem || !selectedInventoryItem.category) return [];
 
+    const key = selectedInventoryItem.category.trim().toLowerCase();
+    const mappedKey = categoryMap[key] || key;
 
+    return subCategories[mappedKey] || [];
+  };
 
   // Optimized image compression
-  const compressImage = (file, maxWidth = 800, maxHeight = 600, quality = 0.7) => {
+  const compressImage = (
+    file,
+    maxWidth = 800,
+    maxHeight = 600,
+    quality = 0.7
+  ) => {
     return new Promise((resolve, reject) => {
       if (file.size < 500 * 1024) {
         resolve(file);
         return;
       }
 
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
       const img = new Image();
-      
+
       img.onload = () => {
         try {
           let { width, height } = img;
-          
+
           const ratio = Math.min(maxWidth / width, maxHeight / height);
-          
+
           if (ratio < 1) {
             width = Math.floor(width * ratio);
             height = Math.floor(height * ratio);
           }
-          
+
           canvas.width = width;
           canvas.height = height;
-          
+
           ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
+          ctx.imageSmoothingQuality = "high";
           ctx.drawImage(img, 0, 0, width, height);
-          
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const compressionRatio = blob.size / file.size;
-              resolve(compressionRatio < 0.8 ? blob : file);
-            } else {
-              resolve(file);
-            }
-          }, 'image/jpeg', quality);
-          
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressionRatio = blob.size / file.size;
+                resolve(compressionRatio < 0.8 ? blob : file);
+              } else {
+                resolve(file);
+              }
+            },
+            "image/jpeg",
+            quality
+          );
         } catch (error) {
-          console.warn('Compression failed, using original:', error);
+          console.warn("Compression failed, using original:", error);
           resolve(file);
         } finally {
           URL.revokeObjectURL(img.src);
         }
       };
-      
+
       img.onerror = () => {
         URL.revokeObjectURL(img.src);
         resolve(file);
       };
-      
+
       img.src = URL.createObjectURL(file);
     });
   };
 
   const validateFile = (file) => {
     const maxSize = 25 * 1024 * 1024;
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
     if (!allowedTypes.includes(file.type.toLowerCase())) {
-      throw new Error('Please select a JPG, PNG, or WebP image file');
+      throw new Error("Please select a JPG, PNG, or WebP image file");
     }
-    
+
     if (file.size > maxSize) {
-      throw new Error('File size must be less than 25MB');
+      throw new Error("File size must be less than 25MB");
     }
-    
+
     return true;
   };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
-    if (name === 'inventoryId') {
-      const selectedItem = inventoryProducts.find(item => item.id === value);
-      setFormData(prev => ({
+
+    if (name === "inventoryId") {
+      const selectedItem = inventoryProducts.find((item) => item.id === value);
+      setFormData((prev) => ({
         ...prev,
         inventoryId: value,
         // Clear sub-category when inventory item changes
-        subCategory: '',
+        subCategory: "",
         // Auto-set image from inventory if no custom image is set
-        ...(selectedItem && !prev.imageUrl && !imageFile ? { imageUrl: selectedItem.image } : {})
+        ...(selectedItem && !prev.imageUrl && !imageFile
+          ? { imageUrl: selectedItem.image }
+          : {}),
       }));
-      
+
       // Update image preview if using inventory item's image
       if (selectedItem && !formData.imageUrl && !imageFile) {
-        setImagePreview(selectedItem.image || '');
+        setImagePreview(selectedItem.image || "");
       }
     } else {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        [name]: type === 'checkbox' ? checked : value
+        [name]: type === "checkbox" ? checked : value,
       }));
     }
   };
 
   const handleImageUrlChange = (e) => {
     const url = e.target.value;
-    setFormData(prev => ({ ...prev, imageUrl: url }));
+    setFormData((prev) => ({ ...prev, imageUrl: url }));
     setImagePreview(url);
   };
 
@@ -196,7 +210,7 @@ const categoryMap = {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelect(e.dataTransfer.files[0]);
     }
@@ -211,57 +225,56 @@ const categoryMap = {
   const handleFileSelect = async (file) => {
     try {
       validateFile(file);
-      
+
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target.result);
       };
       reader.readAsDataURL(file);
-      
+
       setTimeout(async () => {
         try {
           const compressedFile = await compressImage(file);
           setImageFile(compressedFile);
-          
+
           const sizeBefore = (file.size / 1024).toFixed(1);
           const sizeAfter = (compressedFile.size / 1024).toFixed(1);
-          
+
           if (compressedFile !== file) {
             console.log(`Image optimized: ${sizeBefore}KB → ${sizeAfter}KB`);
           }
         } catch (error) {
-          console.warn('Image processing failed, using original:', error);
+          console.warn("Image processing failed, using original:", error);
           setImageFile(file);
         }
       }, 100);
-      
+
       setUseImageUrl(false);
-      setFormData(prev => ({ ...prev, imageUrl: '' }));
-      
+      setFormData((prev) => ({ ...prev, imageUrl: "" }));
     } catch (error) {
       alert(error.message);
-      setImagePreview('');
+      setImagePreview("");
       setImageFile(null);
     }
   };
 
   const uploadImage = async (file) => {
     const storage = getStorage();
-    
+
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(2, 8);
-    const extension = file.type === 'image/png' ? 'png' : 'jpg';
+    const extension = file.type === "image/png" ? "png" : "jpg";
     const filename = `products/${timestamp}_${randomId}.${extension}`;
-    
+
     const storageRef = ref(storage, filename);
-    
+
     try {
       const snapshot = await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(snapshot.ref);
       return downloadURL;
     } catch (error) {
-      console.error('Upload failed:', error);
-      throw new Error('Image upload failed. Please try again.');
+      console.error("Upload failed:", error);
+      throw new Error("Image upload failed. Please try again.");
     }
   };
 
@@ -273,27 +286,27 @@ const categoryMap = {
     try {
       // Validate required fields
       if (!formData.name.trim()) {
-        throw new Error('Product name is required');
+        throw new Error("Product name is required");
       }
       if (!formData.brand.trim()) {
-        throw new Error('Brand is required');
+        throw new Error("Brand is required");
       }
       if (!formData.price || parseFloat(formData.price) <= 0) {
-        throw new Error('Valid price is required');
+        throw new Error("Valid price is required");
       }
       if (!formData.inventoryId) {
-        throw new Error('Please select an inventory item');
+        throw new Error("Please select an inventory item");
       }
 
       let finalImageUrl = formData.imageUrl;
 
       if (imageFile) {
         setUploadProgress(20);
-        
+
         if (!imageFile.lastModified) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
-        
+
         setUploadProgress(30);
         finalImageUrl = await uploadImage(imageFile);
         setUploadProgress(80);
@@ -309,7 +322,7 @@ const categoryMap = {
         price: parseFloat(formData.price),
         imageUrl: finalImageUrl,
         // Inherit category from inventory item
-        category: selectedInventoryItem?.category || formData.category
+        category: selectedInventoryItem?.category || formData.category,
       };
 
       setUploadProgress(90);
@@ -321,14 +334,13 @@ const categoryMap = {
       }
 
       setUploadProgress(100);
-      
+
       setTimeout(() => {
         onClose();
       }, 300);
-      
     } catch (error) {
-      console.error('Error saving product:', error);
-      alert(error.message || 'Error saving product. Please try again.');
+      console.error("Error saving product:", error);
+      alert(error.message || "Error saving product. Please try again.");
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -338,11 +350,10 @@ const categoryMap = {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-white/20">
-        
         {/* Modal Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/20">
           <h2 className="text-2xl font-bold text-white">
-            {product ? 'Edit Product' : 'Add New Product'}
+            {product ? "Edit Product" : "Add New Product"}
           </h2>
           <button
             onClick={onClose}
@@ -357,16 +368,19 @@ const categoryMap = {
         {uploading && (
           <div className="px-6 py-2">
             <div className="w-full bg-white/10 rounded-full h-2">
-              <div 
+              <div
                 className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${uploadProgress}%` }}
               ></div>
             </div>
             <p className="text-white/60 text-sm mt-1 text-center">
-              {uploadProgress < 30 ? 'Preparing...' :
-               uploadProgress < 80 ? 'Uploading image...' :
-               uploadProgress < 90 ? 'Saving product...' :
-               'Finalizing...'}
+              {uploadProgress < 30
+                ? "Preparing..."
+                : uploadProgress < 80
+                ? "Uploading image..."
+                : uploadProgress < 90
+                ? "Saving product..."
+                : "Finalizing..."}
             </p>
           </div>
         )}
@@ -374,10 +388,8 @@ const categoryMap = {
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
             {/* Left Column - Product Details */}
             <div className="space-y-6">
-              
               {/* Inventory Selection */}
               <div>
                 <label className="block text-white font-medium mb-2">
@@ -399,21 +411,33 @@ const categoryMap = {
                   <option value="" className="bg-slate-800 text-white">
                     Select inventory item...
                   </option>
-                  {Object.entries(groupedInventoryItems).map(([category, items]) => (
-                    <optgroup key={category} label={category} className="bg-slate-700 text-white">
-                      {items.map(item => (
-                        <option key={item.id} value={item.id} className="bg-slate-800 text-white">
-                          {item.id} - {item.category} (Stock: {item.stock})
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
+                  {Object.entries(groupedInventoryItems).map(
+                    ([category, items]) => (
+                      <optgroup
+                        key={category}
+                        label={category}
+                        className="bg-slate-700 text-white"
+                      >
+                        {items.map((item) => (
+                          <option
+                            key={item.id}
+                            value={item.id}
+                            className="bg-slate-800 text-white"
+                          >
+                            {item.id} - {item.category} (Stock: {item.stock})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  )}
                 </select>
               </div>
 
               {/* Product Name */}
               <div>
-                <label className="block text-white font-medium mb-2">Product Name *</label>
+                <label className="block text-white font-medium mb-2">
+                  Product Name *
+                </label>
                 <input
                   type="text"
                   name="name"
@@ -428,7 +452,9 @@ const categoryMap = {
 
               {/* Brand */}
               <div>
-                <label className="block text-white font-medium mb-2">Brand *</label>
+                <label className="block text-white font-medium mb-2">
+                  Brand *
+                </label>
                 <input
                   type="text"
                   name="brand"
@@ -443,7 +469,9 @@ const categoryMap = {
 
               {/* Price */}
               <div>
-                <label className="block text-white font-medium mb-2">Price per Day (₱) *</label>
+                <label className="block text-white font-medium mb-2">
+                  Price per Day (₱) *
+                </label>
                 <input
                   type="number"
                   name="price"
@@ -461,17 +489,24 @@ const categoryMap = {
               {/* Category (Read-only from inventory) and Sub-category */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-white font-medium mb-2">Category</label>
+                  <label className="block text-white font-medium mb-2">
+                    Category
+                  </label>
                   <input
                     type="text"
-                    value={selectedInventoryItem?.category || 'Select inventory item first'}
+                    value={
+                      selectedInventoryItem?.category ||
+                      "Select inventory item first"
+                    }
                     disabled
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/60 cursor-not-allowed"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-white font-medium mb-2">Sub-category</label>
+                  <label className="block text-white font-medium mb-2">
+                    Sub-category
+                  </label>
                   <select
                     name="subCategory"
                     value={formData.subCategory}
@@ -480,10 +515,16 @@ const categoryMap = {
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                   >
                     <option value="" className="bg-slate-800 text-white">
-                      {!selectedInventoryItem ? 'Select inventory item first' : 'Select sub-category...'}
+                      {!selectedInventoryItem
+                        ? "Select inventory item first"
+                        : "Select sub-category..."}
                     </option>
-                    {getAvailableSubCategories().map(subCategory => (
-                      <option key={subCategory} value={subCategory} className="bg-slate-800 text-white">
+                    {getAvailableSubCategories().map((subCategory) => (
+                      <option
+                        key={subCategory}
+                        value={subCategory}
+                        className="bg-slate-800 text-white"
+                      >
                         {subCategory}
                       </option>
                     ))}
@@ -494,11 +535,17 @@ const categoryMap = {
               {/* Stock Display (Read-only) */}
               {selectedInventoryItem && (
                 <div>
-                  <label className="block text-white font-medium mb-2">Current Stock</label>
+                  <label className="block text-white font-medium mb-2">
+                    Current Stock
+                  </label>
                   <div className="flex items-center space-x-3 px-4 py-3 bg-white/5 border border-white/10 rounded-lg">
                     <Package className="w-5 h-5 text-white/60" />
-                    <span className="text-white font-medium">{selectedInventoryItem.stock} units</span>
-                    <span className="text-xs text-white/60">(Managed by Inventory)</span>
+                    <span className="text-white font-medium">
+                      {selectedInventoryItem.stock} units
+                    </span>
+                    <span className="text-xs text-white/60">
+                      (Managed by Inventory)
+                    </span>
                   </div>
                 </div>
               )}
@@ -506,7 +553,9 @@ const categoryMap = {
               {/* Status and Approval */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-white font-medium mb-2">Status *</label>
+                  <label className="block text-white font-medium mb-2">
+                    Status *
+                  </label>
                   <select
                     name="status"
                     value={formData.status}
@@ -515,8 +564,12 @@ const categoryMap = {
                     disabled={uploading}
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                   >
-                    {statusOptions.map(option => (
-                      <option key={option.value} value={option.value} className="bg-slate-800 text-white">
+                    {statusOptions.map((option) => (
+                      <option
+                        key={option.value}
+                        value={option.value}
+                        className="bg-slate-800 text-white"
+                      >
                         {option.label}
                       </option>
                     ))}
@@ -533,14 +586,34 @@ const categoryMap = {
                       disabled={uploading}
                       className="w-5 h-5 text-blue-600 bg-white/10 border-white/20 rounded focus:ring-blue-500 focus:ring-2 disabled:opacity-50"
                     />
-                    <span className="text-white font-medium">Display to Users</span>
+                    <span className="text-white font-medium">
+                      Display to Users
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-end">
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="featured"
+                      checked={formData.featured || false}
+                      onChange={handleInputChange}
+                      disabled={uploading}
+                      className="w-5 h-5 text-purple-600 bg-white/10 border-white/20 rounded focus:ring-purple-500 focus:ring-2 disabled:opacity-50"
+                    />
+                    <span className="text-white font-medium">
+                      Featured Product
+                    </span>
                   </label>
                 </div>
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-white font-medium mb-2">Description</label>
+                <label className="block text-white font-medium mb-2">
+                  Description
+                </label>
                 <textarea
                   name="description"
                   value={formData.description}
@@ -555,19 +628,20 @@ const categoryMap = {
 
             {/* Right Column - Image Upload */}
             <div className="space-y-6">
-              
               {/* Image Upload Toggle */}
               <div>
-                <label className="block text-white font-medium mb-4">Product Image</label>
+                <label className="block text-white font-medium mb-4">
+                  Product Image
+                </label>
                 <div className="flex space-x-4 mb-4">
                   <button
                     type="button"
                     onClick={() => setUseImageUrl(false)}
                     disabled={uploading}
                     className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-50 ${
-                      !useImageUrl 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      !useImageUrl
+                        ? "bg-blue-500 text-white"
+                        : "bg-white/10 text-white/60 hover:bg-white/20"
                     }`}
                   >
                     <Upload className="w-4 h-4" />
@@ -578,9 +652,9 @@ const categoryMap = {
                     onClick={() => setUseImageUrl(true)}
                     disabled={uploading}
                     className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-50 ${
-                      useImageUrl 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      useImageUrl
+                        ? "bg-blue-500 text-white"
+                        : "bg-white/10 text-white/60 hover:bg-white/20"
                     }`}
                   >
                     <Link className="w-4 h-4" />
@@ -592,7 +666,9 @@ const categoryMap = {
               {/* Image URL Input */}
               {useImageUrl && (
                 <div>
-                  <label className="block text-white font-medium mb-2">Image URL</label>
+                  <label className="block text-white font-medium mb-2">
+                    Image URL
+                  </label>
                   <input
                     type="url"
                     value={formData.imageUrl}
@@ -609,11 +685,11 @@ const categoryMap = {
                 <div>
                   <div
                     className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
-                      uploading 
-                        ? 'border-white/20 bg-white/5 opacity-50 cursor-not-allowed'
-                        : dragActive 
-                        ? 'border-blue-400 bg-blue-400/10' 
-                        : 'border-white/30 hover:border-white/50 bg-white/5'
+                      uploading
+                        ? "border-white/20 bg-white/5 opacity-50 cursor-not-allowed"
+                        : dragActive
+                        ? "border-blue-400 bg-blue-400/10"
+                        : "border-white/30 hover:border-white/50 bg-white/5"
                     }`}
                     onDragEnter={!uploading ? handleDrag : undefined}
                     onDragLeave={!uploading ? handleDrag : undefined}
@@ -628,17 +704,21 @@ const categoryMap = {
                       disabled={uploading}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                     />
-                    
+
                     <div className="flex flex-col items-center space-y-4">
                       <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center">
                         <Image className="w-8 h-8 text-white/60" />
                       </div>
                       <div>
                         <p className="text-white font-medium mb-2">
-                          {uploading ? 'Upload in progress...' : (
+                          {uploading ? (
+                            "Upload in progress..."
+                          ) : (
                             <>
-                              Drop your image here, or{' '}
-                              <span className="text-blue-400 underline cursor-pointer">browse</span>
+                              Drop your image here, or{" "}
+                              <span className="text-blue-400 underline cursor-pointer">
+                                browse
+                              </span>
                             </>
                           )}
                         </p>
@@ -657,23 +737,25 @@ const categoryMap = {
               {/* Image Preview */}
               {imagePreview && (
                 <div>
-                  <label className="block text-white font-medium mb-2">Preview</label>
+                  <label className="block text-white font-medium mb-2">
+                    Preview
+                  </label>
                   <div className="relative">
                     <img
                       src={imagePreview}
                       alt="Preview"
                       className="w-full h-64 object-cover rounded-lg border border-white/20"
-                      onError={() => setImagePreview('')}
+                      onError={() => setImagePreview("")}
                     />
                     {!uploading && (
                       <button
                         type="button"
                         onClick={() => {
-                          setImagePreview('');
+                          setImagePreview("");
                           setImageFile(null);
-                          setFormData(prev => ({ ...prev, imageUrl: '' }));
+                          setFormData((prev) => ({ ...prev, imageUrl: "" }));
                           if (fileInputRef.current) {
-                            fileInputRef.current.value = '';
+                            fileInputRef.current.value = "";
                           }
                         }}
                         className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full transition-colors"
@@ -687,11 +769,12 @@ const categoryMap = {
                       Custom image ready for upload
                     </p>
                   )}
-                  {!imageFile && formData.imageUrl === selectedInventoryItem?.image && (
-                    <p className="text-white/60 text-xs mt-2 text-center">
-                      Using inventory item's image
-                    </p>
-                  )}
+                  {!imageFile &&
+                    formData.imageUrl === selectedInventoryItem?.image && (
+                      <p className="text-white/60 text-xs mt-2 text-center">
+                        Using inventory item's image
+                      </p>
+                    )}
                 </div>
               )}
             </div>
@@ -715,7 +798,13 @@ const categoryMap = {
               {uploading && (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               )}
-              <span>{uploading ? 'Saving...' : (product ? 'Update Product' : 'Add Product')}</span>
+              <span>
+                {uploading
+                  ? "Saving..."
+                  : product
+                  ? "Update Product"
+                  : "Add Product"}
+              </span>
             </button>
           </div>
         </form>

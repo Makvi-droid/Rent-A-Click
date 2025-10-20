@@ -21,6 +21,9 @@ import Billings from "./pages/Billings";
 import SecuritySettings from "./pages/SecuritySettings";
 import Notifications from "./pages/Notifications";
 import Help from "./pages/Help";
+import AccountPage from "./pages/AccountPage";
+import NotificationPage from "./pages/NotificationPage";
+import HelpSupportPage from "./pages/HelpSupportPage";
 
 function App() {
   return (
@@ -46,6 +49,9 @@ function App() {
           <Route path="/security" element={<SecuritySettings />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/help" element={<Help />} />
+          <Route path="/accountsPage" element={<AccountPage />} />
+          <Route path="/notificationPage" element={<NotificationPage />} />
+          <Route path="/helpSupportPage" element={<HelpSupportPage />} />
         </Routes>
         <Footer />
       </ToastProvider>

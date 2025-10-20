@@ -1,4 +1,4 @@
-// OrderDetailsModal.jsx - COMPLETE FIXED VERSION
+// OrderDetailsModal.jsx - COMPLETE FIXED VERSION WITH WORKING PENALTY
 import React, { useState, useEffect } from "react";
 import {
   X,
@@ -180,22 +180,42 @@ const OrderDetailsModal = ({
     }
   };
 
-  // Check if return is overdue
+  // FIXED: Check if return is overdue
   const isReturnOverdue = () => {
     if (order.itemReturned) return false;
 
-    const returnDate = new Date(order.rentalDetails?.endDate);
-    const returnTime = order.rentalDetails?.returnTime;
+    try {
+      const endDate = order.rentalDetails?.endDate;
+      if (!endDate) return false;
 
-    if (returnTime) {
-      const [hours, minutes] = returnTime.split(":");
-      returnDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      // Handle both string dates and Firebase timestamps
+      let returnDate;
+      if (typeof endDate === "string") {
+        returnDate = new Date(endDate);
+      } else if (endDate && endDate.seconds) {
+        returnDate = new Date(endDate.seconds * 1000);
+      } else if (endDate instanceof Date) {
+        returnDate = endDate;
+      } else if (endDate && typeof endDate.toDate === "function") {
+        returnDate = endDate.toDate();
+      } else {
+        returnDate = new Date(endDate);
+      }
+
+      // Check if date is valid
+      if (isNaN(returnDate.getTime())) {
+        console.warn("Invalid return date:", endDate);
+        return false;
+      }
+
+      return new Date() > returnDate;
+    } catch (error) {
+      console.error("Error checking overdue status:", error);
+      return false;
     }
-
-    return new Date() > returnDate;
   };
 
-  // Calculate penalty if overdue
+  // FIXED: Calculate penalty if overdue
   const calculatePenalty = () => {
     return isReturnOverdue() && !order.itemReturned ? latePenaltyAmount : 0;
   };
@@ -920,19 +940,17 @@ const OrderDetailsModal = ({
                           </span>
                           <span
                             className={`text-sm px-2 py-1 rounded ${
-                              order.idPhysicallyVerified
+                              order.physicalIdShown
                                 ? "bg-green-500/20 text-green-400"
                                 : "bg-yellow-500/20 text-yellow-400"
                             }`}
                           >
-                            {order.idPhysicallyVerified
-                              ? "Verified"
-                              : "Pending"}
+                            {order.physicalIdShown ? "Verified" : "Pending"}
                           </span>
                         </div>
-                        {order.idPhysicallyVerifiedAt && (
+                        {order.physicalIdShownAt && (
                           <p className="text-gray-400 text-xs mt-1">
-                            Verified: {formatDate(order.idPhysicallyVerifiedAt)}
+                            Verified: {formatDate(order.physicalIdShownAt)}
                           </p>
                         )}
                       </div>
@@ -1109,13 +1127,13 @@ const OrderDetailsModal = ({
                         </span>
                       </div>
                     )}
-                    {order.idPhysicallyVerifiedAt && (
+                    {order.physicalIdShownAt && (
                       <div className="flex justify-between">
                         <span className="text-gray-400">
                           ID Physically Verified
                         </span>
                         <span className="text-green-400">
-                          {formatDate(order.idPhysicallyVerifiedAt)}
+                          {formatDate(order.physicalIdShownAt)}
                         </span>
                       </div>
                     )}

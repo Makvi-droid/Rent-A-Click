@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom"; // Add this import
+import { useNavigate } from "react-router-dom";
+import { useNotifications } from "../hooks/useNotifications";
 import {
   Camera,
   Play,
@@ -17,6 +18,7 @@ import {
   Heart,
   ShoppingBag,
   User,
+  Bell,
 } from "lucide-react";
 
 function Navbar() {
@@ -27,6 +29,9 @@ function Navbar() {
 
   // Add useNavigate hook
   const navigate = useNavigate();
+
+  // Get unread notification count
+  const { unreadCount } = useNotifications();
 
   // Navigation handlers - Fixed to actually navigate
   const handleNavigation = (path) => {
@@ -176,6 +181,21 @@ function Navbar() {
 
               {/* User Actions */}
               <div className="flex items-center space-x-4">
+                {/* Notifications */}
+                <button
+                  className="relative p-2 text-gray-300 hover:text-white transition-all duration-300 group"
+                  onClick={() => handleNavigation("/notificationPage")}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg scale-0 group-hover:scale-100 transition-transform duration-300" />
+                  <Bell className="w-5 h-5 relative z-10" />
+                  {/* Notification count badge */}
+                  {unreadCount > 0 && (
+                    <div className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-gradient-to-r from-red-500 to-pink-500 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-red-500/50 animate-pulse">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </div>
+                  )}
+                </button>
+
                 {/* Cart */}
                 <button
                   className="relative p-2 text-gray-300 hover:text-white transition-all duration-300 group"
@@ -183,11 +203,9 @@ function Navbar() {
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg scale-0 group-hover:scale-100 transition-transform duration-300" />
                   <ShoppingBag className="w-5 h-5 relative z-10" />
-                  {/* Cart count badge */}
-                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-pink-500 to-purple-500 rounded-full flex items-center justify-center text-xs font-bold text-white"></div>
                 </button>
 
-                {/* User Profile - Fixed navigation path */}
+                {/* User Profile - with notification badge */}
                 <button
                   className="relative bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2 rounded-full font-medium overflow-hidden group transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-purple-500/25"
                   onClick={() => handleNavigation("/profilePage")}
@@ -196,6 +214,13 @@ function Navbar() {
                     <User className="w-4 h-4" />
                     <span>Profile</span>
                   </span>
+
+                  {/* Notification badge on profile button */}
+                  {unreadCount > 0 && (
+                    <div className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-gradient-to-r from-red-500 to-orange-500 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-red-500/50 border-2 border-black z-20">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </div>
+                  )}
 
                   {/* Animated background layers */}
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
@@ -289,6 +314,22 @@ function Navbar() {
             {/* Mobile User Actions */}
             <div className="flex items-center space-x-4 pt-4 border-t border-gray-700">
               <button
+                className="flex-1 bg-gray-800 text-white px-4 py-3 rounded-lg font-medium transform hover:scale-[1.02] transition-all duration-300 flex items-center justify-center space-x-2 relative"
+                onClick={() => {
+                  handleNavigation("/notificationPage");
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <Bell className="w-4 h-4" />
+                {/* Mobile notification badge */}
+                {unreadCount > 0 && (
+                  <div className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-gradient-to-r from-red-500 to-pink-500 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-red-500/50">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </div>
+                )}
+              </button>
+
+              <button
                 className="flex-1 bg-gray-800 text-white px-4 py-3 rounded-lg font-medium transform hover:scale-[1.02] transition-all duration-300 flex items-center justify-center space-x-2"
                 onClick={() => {
                   handleNavigation("/cartPage");
@@ -309,6 +350,12 @@ function Navbar() {
                   <User className="w-4 h-4" />
                   <span>Profile</span>
                 </span>
+                {/* Mobile profile notification badge */}
+                {unreadCount > 0 && (
+                  <div className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-gradient-to-r from-red-500 to-orange-500 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-red-500/50 border-2 border-gray-900 z-20">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-white/5 transform -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
               </button>
             </div>

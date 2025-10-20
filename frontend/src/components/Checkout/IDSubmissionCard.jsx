@@ -24,22 +24,12 @@ const IDSubmissionCard = ({ onSubmit, userEmail }) => {
           </div>
           <div className="flex items-start space-x-2">
             <span className="text-blue-400 font-bold text-xs mt-0.5">3.</span>
-            <span>Bring the SAME physical ID when you pick up/receive your rental</span>
+            <span>
+              Bring the SAME physical ID when you pick up/receive your rental
+            </span>
           </div>
         </div>
 
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-          <div className="text-blue-300 text-xs font-medium mb-1">
-            Why ID verification is required:
-          </div>
-          <ul className="text-blue-200/80 text-xs space-y-1">
-            <li>• Protects our equipment from theft</li>
-            <li>• Ensures responsible rental practices</li>
-            <li>• Verifies identity for security purposes</li>
-            <li>• Required by our insurance policy</li>
-          </ul>
-        </div>
-        
         <button
           type="button"
           onClick={onSubmit}

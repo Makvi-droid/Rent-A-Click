@@ -45,6 +45,7 @@ import NavigationCard from "../components/Profile/NavigationCard";
 import ProfileHeader from "../components/Profile/ProfileHeader";
 import QuickActions from "../components/Profile/QuickActions";
 import SignOutConfirmation from "../components/Profile/SignOutConfirmation";
+import Navbar from "../components/Navbar";
 
 const ProfilePage = () => {
   const [showSignOutModal, setShowSignOutModal] = useState(false);
@@ -234,6 +235,7 @@ const ProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
+      <Navbar />
       {/* Background effects */}
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-pink-900/10" />
       <div className="fixed top-0 right-0 w-96 h-96 bg-gradient-to-bl from-purple-500/5 to-transparent rounded-full blur-3xl" />
@@ -343,7 +345,7 @@ const ProfilePage = () => {
               title="Account Settings"
               description="Update your personal information and preferences"
               icon={Settings}
-              onClick={() => handleNavigation("/settings")}
+              onClick={() => handleNavigation("/accountsPage")}
               color="purple"
             />
 
@@ -359,7 +361,7 @@ const ProfilePage = () => {
               title="Notifications"
               description="Configure email and push notification preferences"
               icon={Bell}
-              onClick={() => handleNavigation("/notifications")}
+              onClick={() => handleNavigation("/notificationPage")}
               color="green"
               badge=""
             />
@@ -376,7 +378,7 @@ const ProfilePage = () => {
               title="Help & Support"
               description="Documentation, tutorials, and customer support"
               icon={HelpCircle}
-              onClick={() => handleNavigation("/help")}
+              onClick={() => handleNavigation("/helpSupportPage")}
               color="gray"
             />
           </div>
