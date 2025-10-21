@@ -1,88 +1,113 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { auth, firestore } from '../firebase';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import { auth, firestore } from "../firebase";
+import { uploadToCloudinary } from "../services/cloudinaryService";
 
 // Import all modular components
-import ProfilePhotoUpload from '../components/Account/ProfilePhoto';
-import PersonalInformation from '../components/Account/PersonalInformation';
-import ContactInformation from '../components/Account/ContactInformation';
-import Address from '../components/Account/Address';
-import IdVerification from '../components/Account/IdVerification';
+import ProfilePhotoUpload from "../components/Account/ProfilePhoto";
+import PersonalInformation from "../components/Account/PersonalInformation";
+import ContactInformation from "../components/Account/ContactInformation";
+import Address from "../components/Account/Address";
+import IdVerification from "../components/Account/IdVerification";
 
 const AccountPage = () => {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(null);
+  const [customerId, setCustomerId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [formData, setFormData] = useState({
     // Personal Information (read-only, managed by PersonalInformation component)
-    dateOfBirth: '',
-    
+    dateOfBirth: "",
+
     // Contact Information
-    primaryPhone: '',
-    alternativePhone: '',
-    
+    primaryPhone: "",
+    alternativePhone: "",
+
     // Address
-    streetAddress: '',
-    barangay: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    
+    streetAddress: "",
+    barangay: "",
+    city: "",
+    state: "",
+    zipCode: "",
+
     // ID Verification
-    idType: '',
-    idNumber: '',
+    idType: "",
+    idNumber: "",
     idDocument: null,
-    
+    idDocumentUrl: "", // Cloudinary URL
+
     // Profile Photo
-    profilePhoto: null
+    profilePhoto: null,
+    profilePhotoUrl: "", // Cloudinary URL
   });
 
   const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState('');
+  const [saveMessage, setSaveMessage] = useState("");
+  const [uploadProgress, setUploadProgress] = useState("");
 
-  // Load user data from Firestore
+  // Load user data from Firestore customers collection
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setCurrentUser(firebaseUser);
-        
+
         try {
-          // Get user document from Firestore
-          const userRef = doc(firestore, "users", firebaseUser.uid);
-          const userDoc = await getDoc(userRef);
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            
+          // Find customer document by firebaseUid
+          const customersRef = collection(firestore, "customers");
+          const q = query(
+            customersRef,
+            where("firebaseUid", "==", firebaseUser.uid)
+          );
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            // Customer exists
+            const customerDoc = querySnapshot.docs[0];
+            const customerData = customerDoc.data();
+            setCustomerId(customerDoc.id);
+
             // Populate form with existing data
-            setFormData(prev => ({
+            setFormData((prev) => ({
               ...prev,
-              dateOfBirth: userData.dateOfBirth || '',
-              primaryPhone: userData.phoneNumber || '',
-              alternativePhone: userData.alternativePhone || '',
-              streetAddress: userData.address?.street || '',
-              barangay: userData.address?.barangay || '',
-              city: userData.address?.city || '',
-              state: userData.address?.state || '',
-              zipCode: userData.address?.zipCode || '',
-              idType: userData.idVerification?.type || '',
-              idNumber: userData.idVerification?.number || '',
-              profilePhoto: userData.profilePicture || null
+              dateOfBirth: customerData.dateOfBirth || "",
+              primaryPhone: customerData.phoneNumber || "",
+              alternativePhone: customerData.alternativePhone || "",
+              streetAddress: customerData.address?.street || "",
+              barangay: customerData.address?.barangay || "",
+              city: customerData.address?.city || "",
+              state: customerData.address?.state || "",
+              zipCode: customerData.address?.zipCode || "",
+              idType: customerData.idVerification?.type || "",
+              idNumber: customerData.idVerification?.number || "",
+              idDocumentUrl: customerData.idVerification?.documentUrl || "",
+              profilePhotoUrl: customerData.profilePicture || "",
             }));
+          } else {
+            // No customer document exists yet - will be created on first save
+            console.log("No customer document found, will create on save");
           }
         } catch (error) {
-          console.error("Error loading user data:", error);
+          console.error("Error loading customer data:", error);
         }
       } else {
         // No user is signed in, redirect to login
-        navigate('/auth');
+        navigate("/auth");
         return;
       }
-      
+
       setIsLoading(false);
     });
 
@@ -90,29 +115,79 @@ const AccountPage = () => {
   }, [navigate]);
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
   const handleSave = async () => {
     if (!currentUser) return;
-    
+
     setIsSaving(true);
-    setSaveMessage('');
-    
+    setSaveMessage("");
+    setUploadProgress("");
+
     try {
-      const userRef = doc(firestore, "users", currentUser.uid);
-      
-      // Debug: Log what we're trying to save
-      console.log('Attempting to save:', {
-        userUID: currentUser.uid,
-        formData: formData
-      });
-      
-      // Prepare data for Firestore update (excluding file objects)
+      // Prepare URLs for images
+      let profilePhotoUrl = formData.profilePhotoUrl;
+      let idDocumentUrl = formData.idDocumentUrl;
+
+      // Upload images to Cloudinary if new files were selected
+      const uploads = [];
+
+      if (formData.profilePhoto instanceof File) {
+        setUploadProgress("Uploading profile photo...");
+        uploads.push({
+          file: formData.profilePhoto,
+          folder: `profile-photos/${currentUser.uid}`,
+          field: "profilePhoto",
+        });
+      }
+
+      if (formData.idDocument instanceof File) {
+        setUploadProgress("Uploading ID document...");
+        uploads.push({
+          file: formData.idDocument,
+          folder: `id-documents/${currentUser.uid}`,
+          field: "idDocument",
+        });
+      }
+
+      // Upload all files
+      if (uploads.length > 0) {
+        setUploadProgress(`Uploading ${uploads.length} file(s)...`);
+
+        for (let i = 0; i < uploads.length; i++) {
+          const upload = uploads[i];
+          setUploadProgress(`Uploading file ${i + 1} of ${uploads.length}...`);
+
+          try {
+            const result = await uploadToCloudinary(upload.file, upload.folder);
+
+            if (upload.field === "profilePhoto") {
+              profilePhotoUrl = result.url;
+            } else if (upload.field === "idDocument") {
+              idDocumentUrl = result.url;
+            }
+
+            console.log(`${upload.field} uploaded:`, result.url);
+          } catch (uploadError) {
+            console.error(`Error uploading ${upload.field}:`, uploadError);
+            throw new Error(
+              `Failed to upload ${upload.field}: ${uploadError.message}`
+            );
+          }
+        }
+      }
+
+      setUploadProgress("Saving to database...");
+
+      // Prepare data for Firestore update
       const updateData = {
+        firebaseUid: currentUser.uid,
+        email: currentUser.email,
+        fullName: currentUser.displayName || "",
         dateOfBirth: formData.dateOfBirth,
         phoneNumber: formData.primaryPhone,
         alternativePhone: formData.alternativePhone,
@@ -121,68 +196,78 @@ const AccountPage = () => {
           barangay: formData.barangay,
           city: formData.city,
           state: formData.state,
-          zipCode: formData.zipCode
+          zipCode: formData.zipCode,
         },
         idVerification: {
           type: formData.idType,
           number: formData.idNumber,
-          documentUploaded: !!formData.idDocument
+          documentUrl: idDocumentUrl,
+          documentUploaded: !!idDocumentUrl,
+          verified: false, // Admin will verify
         },
-        // Note: File objects cannot be saved directly to Firestore
-        // profilePicture: formData.profilePhoto, // Commented out - files need Firebase Storage
-        updatedAt: new Date()
+        profilePicture: profilePhotoUrl,
+        updatedAt: new Date(),
       };
 
-      console.log('Update data:', updateData);
+      console.log("Saving customer data:", updateData);
 
-      await updateDoc(userRef, updateData);
-      
-      console.log('Save successful!');
-      setSaveMessage('Settings saved successfully!');
-      
+      if (customerId) {
+        // Update existing customer document
+        const customerRef = doc(firestore, "customers", customerId);
+        await updateDoc(customerRef, updateData);
+      } else {
+        // Create new customer document
+        const customersRef = collection(firestore, "customers");
+        const newCustomerRef = doc(customersRef);
+        await setDoc(newCustomerRef, {
+          ...updateData,
+          createdAt: new Date(),
+        });
+        setCustomerId(newCustomerRef.id);
+      }
+
+      console.log("Save successful!");
+      setUploadProgress("");
+      setSaveMessage("Settings saved successfully!");
+
       // Navigate back to profile page after a short delay
       setTimeout(() => {
-        navigate('/profilePage');
+        navigate("/profilePage");
       }, 1500);
-      
     } catch (error) {
-      console.error("Detailed error saving user data:", error);
+      console.error("Detailed error saving customer data:", error);
+      setUploadProgress("");
       setSaveMessage(`Error saving changes: ${error.message}`);
-      setTimeout(() => setSaveMessage(''), 5000);
+      setTimeout(() => setSaveMessage(""), 5000);
     }
-    
+
     setIsSaving(false);
   };
 
   const isFormValid = () => {
     const required = [
-      'dateOfBirth', 'primaryPhone', 'streetAddress', 'barangay',
-      'city', 'state', 'zipCode', 'idType', 'idNumber'
+      "dateOfBirth",
+      "primaryPhone",
+      "streetAddress",
+      "barangay",
+      "city",
+      "state",
+      "zipCode",
+      "idType",
+      "idNumber",
     ];
-    
-    // Debug logging - remove this after fixing
-    console.log('Form validation check:', {
-      formData: formData,
-      requiredFields: required.map(field => ({
-        field,
-        value: formData[field],
-        hasValue: !!formData[field]?.toString().trim(),
-        isEmpty: !formData[field]?.toString().trim()
-      })),
-      idDocument: !!formData.idDocument,
-      profilePhoto: !!formData.profilePhoto,
-      allFieldsValid: required.every(field => formData[field]?.toString().trim()),
-      documentsValid: formData.idDocument && formData.profilePhoto,
-      // TEMPORARY: Test without file uploads
-      validWithoutFiles: required.every(field => formData[field]?.toString().trim())
-    });
-    
-    const fieldsValid = required.every(field => formData[field]?.toString().trim());
-    // TEMPORARY: Commented out file upload requirements for testing
-    // const documentsValid = formData.idDocument && formData.profilePhoto;
-    
-    // return fieldsValid && documentsValid;
-    return fieldsValid; // TEMPORARY: Only check text fields
+
+    const fieldsValid = required.every((field) =>
+      formData[field]?.toString().trim()
+    );
+
+    // Check if documents are uploaded (either new files or existing URLs)
+    const profilePhotoValid =
+      formData.profilePhoto instanceof File || formData.profilePhotoUrl;
+    const idDocumentValid =
+      formData.idDocument instanceof File || formData.idDocumentUrl;
+
+    return fieldsValid && profilePhotoValid && idDocumentValid;
   };
 
   // Show loading state
@@ -208,7 +293,7 @@ const AccountPage = () => {
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-pink-900/10" />
       <div className="fixed top-0 right-0 w-96 h-96 bg-gradient-to-bl from-purple-500/5 to-transparent rounded-full blur-3xl" />
       <div className="fixed bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-pink-500/5 to-transparent rounded-full blur-3xl" />
-      
+
       {/* Floating particles - matching ProfilePage */}
       <div className="fixed inset-0 pointer-events-none z-10">
         {Array.from({ length: 8 }, (_, i) => (
@@ -230,7 +315,7 @@ const AccountPage = () => {
         {/* Header with back navigation - matching ProfilePage style */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <button
-            onClick={() => navigate('/profilePage')}
+            onClick={() => navigate("/profilePage")}
             className="flex items-center space-x-3 text-gray-300 hover:text-white transition-all duration-300 group"
           >
             <div className="p-2 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 group-hover:border-purple-500/50 group-hover:bg-gray-700/50 transition-all duration-300 shadow-lg">
@@ -241,39 +326,41 @@ const AccountPage = () => {
 
           {/* Page title - matching ProfilePage style */}
           <div className="text-right">
-            <h1 className="text-xl sm:text-2xl font-bold text-white">Account Settings</h1>
-            <p className="text-xs sm:text-sm text-gray-400">Manage your account information</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-white">
+              Account Settings
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-400">
+              Manage your account information
+            </p>
           </div>
         </div>
 
         {/* Form sections with ProfilePage styling */}
         <div className="space-y-6">
           <ProfilePhotoUpload
-            currentPhoto={formData.profilePhoto}
-            onPhotoChange={(file) => handleInputChange('profilePhoto', file)}
+            currentPhoto={formData.profilePhotoUrl || formData.profilePhoto}
+            onPhotoChange={(file) => handleInputChange("profilePhoto", file)}
           />
-          
+
           {/* PersonalInformation now handles its own data fetching */}
-          <PersonalInformation 
-            data={formData}
-            onChange={handleInputChange}
-          />
-          
-          <ContactInformation 
-            data={formData}
-            onChange={handleInputChange}
-          />
-          
-          <Address
-            data={formData}
-            onChange={handleInputChange}
-          />
-          
-          <IdVerification 
-            data={formData}
-            onChange={handleInputChange}
-          />
+          <PersonalInformation data={formData} onChange={handleInputChange} />
+
+          <ContactInformation data={formData} onChange={handleInputChange} />
+
+          <Address data={formData} onChange={handleInputChange} />
+
+          <IdVerification data={formData} onChange={handleInputChange} />
         </div>
+
+        {/* Upload progress indicator */}
+        {uploadProgress && (
+          <div className="mt-6 text-center p-4 rounded-2xl backdrop-blur-sm border border-blue-700/30 bg-blue-900/20">
+            <div className="flex items-center justify-center space-x-3">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+              <p className="text-sm text-blue-300">{uploadProgress}</p>
+            </div>
+          </div>
+        )}
 
         {/* Action buttons section - matching ProfilePage button style */}
         <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-end items-center">
@@ -282,9 +369,11 @@ const AccountPage = () => {
             onClick={handleSave}
             disabled={!isFormValid() || isSaving}
             className={`px-8 py-4 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] shadow-xl backdrop-blur-sm border relative overflow-hidden group
-              ${isFormValid() 
-                ? 'bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-600 hover:to-pink-600 text-white border-purple-500/30 hover:shadow-purple-500/25' 
-                : 'bg-gray-800/50 cursor-not-allowed text-gray-400 border-gray-700/50'}`}
+              ${
+                isFormValid()
+                  ? "bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-600 hover:to-pink-600 text-white border-purple-500/30 hover:shadow-purple-500/25"
+                  : "bg-gray-800/50 cursor-not-allowed text-gray-400 border-gray-700/50"
+              }`}
           >
             <span className="relative z-10 flex items-center justify-center space-x-3">
               {isSaving ? (
@@ -300,20 +389,24 @@ const AccountPage = () => {
               <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-white/5 transform -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
             )}
           </button>
-          
+
           {!isFormValid() && (
             <p className="text-xs text-gray-500 max-w-xs text-center sm:text-right">
-              Please fill in all required fields to save your changes
+              Please fill in all required fields and upload required documents
             </p>
           )}
         </div>
 
         {/* Save message with ProfilePage styling */}
         {saveMessage && (
-          <div className={`mt-6 text-center p-4 rounded-2xl backdrop-blur-sm border font-medium shadow-xl
-            ${saveMessage.includes('Error') 
-              ? 'text-red-400 bg-red-900/20 border-red-700/30' 
-              : 'text-green-400 bg-green-900/20 border-green-700/30'}`}>
+          <div
+            className={`mt-6 text-center p-4 rounded-2xl backdrop-blur-sm border font-medium shadow-xl
+            ${
+              saveMessage.includes("Error")
+                ? "text-red-400 bg-red-900/20 border-red-700/30"
+                : "text-green-400 bg-green-900/20 border-green-700/30"
+            }`}
+          >
             {saveMessage}
           </div>
         )}
@@ -321,8 +414,9 @@ const AccountPage = () => {
         {/* Information note with ProfilePage styling */}
         <div className="mt-6 p-4 bg-blue-900/20 border border-blue-700/30 rounded-2xl backdrop-blur-sm shadow-xl">
           <p className="text-sm text-blue-200/80 text-center">
-            <strong className="text-blue-300">Note:</strong> Your name and email are automatically synced from your account and cannot be changed here.
-            Contact support if you need to update this information.
+            <strong className="text-blue-300">Note:</strong> Your name and email
+            are automatically synced from your account and cannot be changed
+            here. Contact support if you need to update this information.
           </p>
         </div>
       </div>
@@ -330,8 +424,12 @@ const AccountPage = () => {
       {/* Animation styles - matching ProfilePage */}
       <style jsx>{`
         @keyframes float {
-          0% { transform: translateY(0px) rotate(0deg); }
-          100% { transform: translateY(-15px) rotate(180deg); }
+          0% {
+            transform: translateY(0px) rotate(0deg);
+          }
+          100% {
+            transform: translateY(-15px) rotate(180deg);
+          }
         }
       `}</style>
     </div>

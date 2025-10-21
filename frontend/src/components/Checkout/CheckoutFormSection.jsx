@@ -1,4 +1,4 @@
-// FIXED: CheckoutFormSection.jsx
+// CheckoutFormSection.jsx - FIXED: Pass setFormData and setErrors to RentalDetailsStep
 import React from "react";
 import RentalDetailsStep from "./RentalDetailsStep";
 import CustomerInfoStep from "./CustomerInfoStep";
@@ -9,6 +9,8 @@ import NavigationControls from "./NavigationControls";
 const CheckoutFormSection = ({
   currentStep,
   formData,
+  setFormData,
+  setErrors,
   errors,
   rentalDays,
   formatCurrency,
@@ -29,7 +31,8 @@ const CheckoutFormSection = ({
   rentalItems,
   // FIXED: Props for camera rental and ID submission
   hasCameraRental = false,
-  onGoogleFormSubmission
+  savedIdUrl,
+  onGoogleFormSubmission,
 }) => {
   const renderCurrentStep = () => {
     switch (currentStep) {
@@ -37,6 +40,8 @@ const CheckoutFormSection = ({
         return (
           <RentalDetailsStep
             formData={formData}
+            setFormData={setFormData}
+            setErrors={setErrors}
             errors={errors}
             rentalDays={rentalDays}
             formatCurrency={formatCurrency}
@@ -44,9 +49,9 @@ const CheckoutFormSection = ({
             onDateChange={onDateChange}
             onInputChange={onInputChange}
             getTodayDate={getTodayDate}
-            // FIXED: Pass camera rental props
             hasCameraRental={hasCameraRental}
             onGoogleFormSubmission={onGoogleFormSubmission}
+            savedIdUrl={savedIdUrl}
           />
         );
       case 2:
@@ -81,7 +86,6 @@ const CheckoutFormSection = ({
             rentalDays={rentalDays}
             onInputChange={onInputChange}
             paymentStatus={paymentStatus}
-            // FIXED: Pass additional props for review
             hasCameraRental={hasCameraRental}
             rentalItems={rentalItems}
             formatCurrency={formatCurrency}
@@ -105,7 +109,6 @@ const CheckoutFormSection = ({
           onSubmit={onSubmit}
           formData={formData}
           paymentStatus={paymentStatus}
-          // FIXED: Pass camera rental validation
           hasCameraRental={hasCameraRental}
         />
       </div>

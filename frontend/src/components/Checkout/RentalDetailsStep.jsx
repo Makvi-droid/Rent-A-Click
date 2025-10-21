@@ -1,4 +1,4 @@
-// Updated RentalDetailsStep.jsx - Fixed time selection based on delivery method
+// RentalDetailsStep.jsx - FIXED: Added setFormData and setErrors props
 import React from "react";
 import { Calendar, Clock, MapPin, Truck, AlertCircle } from "lucide-react";
 import DatePickerInput from "./DatePickerInput";
@@ -6,6 +6,8 @@ import MandatoryIDVerification from "./MandatoryIDVerification";
 
 const RentalDetailsStep = ({
   formData,
+  setFormData,
+  setErrors,
   errors,
   rentalDays,
   formatCurrency,
@@ -13,8 +15,9 @@ const RentalDetailsStep = ({
   onDateChange,
   onInputChange,
   getTodayDate,
-  // Updated: No longer camera-specific, mandatory for all rentals
+  hasCameraRental = false,
   onGoogleFormSubmission,
+  savedIdUrl,
 }) => {
   return (
     <div className="space-y-8">
@@ -25,11 +28,14 @@ const RentalDetailsStep = ({
         <h2 className="text-3xl font-bold text-white">Rental Details</h2>
       </div>
 
-      {/* MANDATORY ID VERIFICATION SECTION - Now for all rentals */}
+      {/* MANDATORY ID VERIFICATION SECTION */}
       <MandatoryIDVerification
         formData={formData}
         errors={errors}
         onGoogleFormSubmission={onGoogleFormSubmission}
+        setFormData={setFormData}
+        setErrors={setErrors}
+        savedIdUrl={savedIdUrl}
       />
 
       {/* RENTAL DATES SECTION */}
@@ -68,7 +74,7 @@ const RentalDetailsStep = ({
         </div>
       </div>
 
-      {/* DELIVERY METHOD SECTION - Moved before time selection for better UX */}
+      {/* DELIVERY METHOD SECTION */}
       <div className="space-y-4">
         <h3 className="text-xl font-semibold text-white mb-4">
           Delivery Method
@@ -121,7 +127,7 @@ const RentalDetailsStep = ({
         </div>
       </div>
 
-      {/* TIME SELECTION SECTION - Now conditional based on delivery method */}
+      {/* TIME SELECTION SECTION */}
       <div className="space-y-6">
         <h3 className="text-xl font-semibold text-white">Time Selection</h3>
 
@@ -227,7 +233,6 @@ const RentalDetailsStep = ({
             <span className="text-white font-medium">
               Rental Duration: {rentalDays} {rentalDays === 1 ? "day" : "days"}
             </span>
-            {/* Updated time display logic */}
             {formData.deliveryMethod === "pickup" &&
               formData.pickupTime &&
               formData.returnTime && (

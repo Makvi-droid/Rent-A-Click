@@ -1,15 +1,19 @@
-// MandatoryIDVerification.jsx - New mandatory ID verification component
 import React from "react";
-import { Shield, AlertCircle, CheckCircle, FileText } from "lucide-react";
+import { Shield, CheckCircle } from "lucide-react";
 import IDSubmissionCard from "./IDSubmissionCard";
 import IDVerificationStatus from "./IDVerificationStatus";
-import IDRequirementNotice from "./IDRequirementNotice";
+import SavedIDOption from "./SavedIDOption";
 
 const MandatoryIDVerification = ({
   formData,
   errors,
   onGoogleFormSubmission,
+  setFormData,
+  setErrors,
+  savedIdUrl, // NEW: Pass saved ID URL from customer data
 }) => {
+  const hasSavedId = !!savedIdUrl;
+
   return (
     <div className="bg-gradient-to-r from-red-500/10 via-orange-500/10 to-yellow-500/10 border border-red-500/30 rounded-xl p-6 mb-8">
       <div className="flex items-start space-x-4">
@@ -36,7 +40,7 @@ const MandatoryIDVerification = ({
               </span>
               {formData.idSubmitted && (
                 <span className="px-3 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full border border-green-500/30">
-                  ✓ Submitted
+                  ✓ Verified
                 </span>
               )}
             </div>
@@ -48,8 +52,6 @@ const MandatoryIDVerification = ({
             </p>
           </div>
 
-          {/* ID Requirements Notice */}
-
           {/* ID Verification Status */}
           <IDVerificationStatus
             isSubmitted={formData.idSubmitted}
@@ -57,11 +59,25 @@ const MandatoryIDVerification = ({
             errorMessage={errors.idSubmitted}
           />
 
-          {/* ID Submission Card */}
-          {!formData.idSubmitted && (
+          {/* Show saved ID option if available */}
+          {!formData.idSubmitted && hasSavedId && (
+            <SavedIDOption
+              savedIdUrl={savedIdUrl}
+              formData={formData}
+              setFormData={setFormData}
+              setErrors={setErrors}
+            />
+          )}
+
+          {/* ID Submission Card - Only show if no saved ID or user chose to upload new */}
+          {!formData.idSubmitted && (!hasSavedId || formData.uploadNewId) && (
             <IDSubmissionCard
               onSubmit={onGoogleFormSubmission}
               userEmail={formData.email}
+              formData={formData}
+              setFormData={setFormData}
+              setErrors={setErrors}
+              hasSavedId={hasSavedId}
             />
           )}
         </div>

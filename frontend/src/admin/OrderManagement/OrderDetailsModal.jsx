@@ -1,4 +1,3 @@
-// OrderDetailsModal.jsx - COMPLETE FIXED VERSION WITH WORKING PENALTY
 import React, { useState, useEffect } from "react";
 import {
   X,

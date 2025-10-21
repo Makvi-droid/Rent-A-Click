@@ -1,4 +1,4 @@
-// handleMandatoryIDSubmission.js - FIXED: Proper state management without loops
+// handleMandatoryIDSubmission.js - FIXED: No automatic dialog, customer confirms manually
 
 export const handleMandatoryIDSubmission = (
   formData,
@@ -16,6 +16,7 @@ export const handleMandatoryIDSubmission = (
       `All equipment rentals require ID verification for security and insurance purposes.\n\n` +
       `Please submit a photo of your valid government ID through our secure form.\n\n` +
       `⚠️ Important: You must bring the SAME physical ID when picking up/receiving your rental.\n\n` +
+      `After submitting the form, come back here and check the confirmation box.\n\n` +
       `Click OK to open the verification form.`
   );
 
@@ -45,57 +46,39 @@ export const handleMandatoryIDSubmission = (
       return;
     }
 
-    // Give user a moment to see the form opened, then ask for confirmation
-    setTimeout(() => {
-      showCompletionDialog(setFormData, setErrors);
-    }, 1500);
+    // FIXED: No automatic dialog - let customer confirm manually via checkbox
+    alert(
+      "Form opened in new tab!\n\n" +
+        "After completing the form, come back here and check the confirmation box below the button."
+    );
   }
 };
 
-// Completion dialog without infinite loops
-const showCompletionDialog = (setFormData, setErrors) => {
-  const completed = window.confirm(
-    `Did you successfully submit your ID photo?\n\n` +
-      `✅ Click OK if you completed the form submission\n` +
-      `❌ Click Cancel if you need to submit it later`
+// Manual confirmation handler (called when checkbox is checked)
+export const handleManualIDConfirmation = (setFormData, setErrors) => {
+  // Update form data
+  setFormData((prev) => ({
+    ...prev,
+    idSubmitted: true,
+  }));
+
+  // Clear the ID verification error
+  setErrors((prev) => {
+    const newErrors = { ...prev };
+    delete newErrors.idSubmitted;
+    return newErrors;
+  });
+
+  // Success confirmation
+  alert(
+    `✅ ID Verification Confirmed!\n\n` +
+      `Thank you for completing the verification.\n` +
+      `You can now continue with your rental.\n\n` +
+      `📋 Important Reminders:\n` +
+      `• Bring your PHYSICAL ID when picking up equipment\n` +
+      `• ID must match the one you submitted\n` +
+      `• Keep your ID with you during the entire rental period`
   );
-
-  if (completed) {
-    // Update form data
-    setFormData((prev) => ({
-      ...prev,
-      idSubmitted: true,
-    }));
-
-    // IMPORTANT: Clear the ID verification error
-    setErrors((prev) => {
-      const newErrors = { ...prev };
-      delete newErrors.idSubmitted;
-      return newErrors;
-    });
-
-    // Success confirmation
-    setTimeout(() => {
-      alert(
-        `✅ ID Verification Submitted!\n\n` +
-          `Your ID verification has been received.\n` +
-          `You can now continue with your rental.\n\n` +
-          `📋 Important Reminders:\n` +
-          `• Bring your PHYSICAL ID when picking up equipment\n` +
-          `• ID must match the one you submitted\n` +
-          `• Keep your ID with you during the entire rental period`
-      );
-    }, 100);
-  } else {
-    // User clicked Cancel - they haven't submitted yet
-    // Just inform them, don't change any state
-    alert(
-      `ID Verification Pending\n\n` +
-        `No problem! You can complete the verification anytime.\n\n` +
-        `Click the "Submit ID Verification" button when you're ready.\n\n` +
-        `Note: You must complete ID verification before proceeding to checkout.`
-    );
-  }
 };
 
 // Validation helper specifically for mandatory ID verification

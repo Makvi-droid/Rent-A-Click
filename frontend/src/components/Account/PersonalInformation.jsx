@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Edit2, User, Mail, Lock } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, firestore } from '../../firebase'; // If firebase.js is in src/ folder
+import React, { useState, useEffect } from "react";
+import { Edit2, User, Mail, Lock, Calendar } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { auth, firestore } from "../../firebase";
 
 const PersonalInformation = ({ data, onChange }) => {
   const [userInfo, setUserInfo] = useState({
-    fullName: '',
-    email: '',
-    firstName: '',
-    lastName: ''
+    fullName: "",
+    email: "",
+    firstName: "",
+    lastName: "",
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -17,42 +17,60 @@ const PersonalInformation = ({ data, onChange }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // Get user document from Firestore
-          const userRef = doc(firestore, "users", firebaseUser.uid);
-          const userDoc = await getDoc(userRef);
-          
+          // Query customers collection by firebaseUid
+          const customersRef = collection(firestore, "customers");
+          const q = query(
+            customersRef,
+            where("firebaseUid", "==", firebaseUser.uid)
+          );
+          const querySnapshot = await getDocs(q);
+
           let userData = {};
-          if (userDoc.exists()) {
-            userData = userDoc.data();
+
+          if (!querySnapshot.empty) {
+            // Customer document exists
+            const customerDoc = querySnapshot.docs[0];
+            userData = customerDoc.data();
+
+            // Extract name information from customer document
+            const fullName =
+              userData.fullName || firebaseUser.displayName || "";
+            const email = userData.email || firebaseUser.email || "";
+
+            // Try to split full name into first and last name
+            const nameParts = fullName.trim().split(" ");
+            const firstName = nameParts[0] || "";
+            const lastName = nameParts.slice(1).join(" ") || "";
+
+            setUserInfo({
+              fullName,
+              email,
+              firstName,
+              lastName,
+            });
+          } else {
+            // No customer document yet - fallback to Firebase Auth data
+            const fullName = firebaseUser.displayName || "";
+            const nameParts = fullName.trim().split(" ");
+
+            setUserInfo({
+              fullName,
+              email: firebaseUser.email || "",
+              firstName: nameParts[0] || "",
+              lastName: nameParts.slice(1).join(" ") || "",
+            });
           }
-
-          // Extract name information
-          const fullName = userData.fullName || firebaseUser.displayName || '';
-          const email = userData.email || firebaseUser.email || '';
-          
-          // Try to split full name into first and last name
-          const nameParts = fullName.split(' ');
-          const firstName = nameParts[0] || '';
-          const lastName = nameParts.slice(1).join(' ') || '';
-
-          setUserInfo({
-            fullName,
-            email,
-            firstName,
-            lastName
-          });
-
         } catch (error) {
-          console.error("Error loading user data:", error);
-          // Fallback to Firebase user data
-          const fullName = firebaseUser.displayName || '';
-          const nameParts = fullName.split(' ');
-          
+          console.error("Error loading customer data:", error);
+          // Fallback to Firebase Auth data
+          const fullName = firebaseUser.displayName || "";
+          const nameParts = fullName.trim().split(" ");
+
           setUserInfo({
             fullName,
-            email: firebaseUser.email || '',
-            firstName: nameParts[0] || '',
-            lastName: nameParts.slice(1).join(' ') || ''
+            email: firebaseUser.email || "",
+            firstName: nameParts[0] || "",
+            lastName: nameParts.slice(1).join(" ") || "",
           });
         }
       }
@@ -88,7 +106,7 @@ const PersonalInformation = ({ data, onChange }) => {
         </div>
         Personal Information
       </h3>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* First Name - Read Only */}
         <div>
@@ -109,7 +127,7 @@ const PersonalInformation = ({ data, onChange }) => {
             />
             <div className="absolute inset-0 bg-gradient-to-r from-gray-500/5 to-gray-400/5 rounded-xl pointer-events-none" />
           </div>
-          <p className="text-xs text-gray-500 mt-1">This information is managed through your account settings</p>
+          <p className="text-xs text-gray-500 mt-1">Synced from your account</p>
         </div>
 
         {/* Last Name - Read Only */}
@@ -131,7 +149,7 @@ const PersonalInformation = ({ data, onChange }) => {
             />
             <div className="absolute inset-0 bg-gradient-to-r from-gray-500/5 to-gray-400/5 rounded-xl pointer-events-none" />
           </div>
-          <p className="text-xs text-gray-500 mt-1">This information is managed through your account settings</p>
+          <p className="text-xs text-gray-500 mt-1">Synced from your account</p>
         </div>
 
         {/* Email Address - Read Only */}
@@ -153,23 +171,32 @@ const PersonalInformation = ({ data, onChange }) => {
             />
             <div className="absolute inset-0 bg-gradient-to-r from-gray-500/5 to-gray-400/5 rounded-xl pointer-events-none" />
           </div>
-          <p className="text-xs text-gray-500 mt-1">Email cannot be changed here for security reasons</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Email cannot be changed here for security
+          </p>
         </div>
 
         {/* Date of Birth - Editable */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Date of Birth
+          <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-gray-400" />
+            Date of Birth *
           </label>
           <input
             type="date"
-            value={data?.dateOfBirth || ''}
-            onChange={(e) => onChange && onChange('dateOfBirth', e.target.value)}
+            value={data?.dateOfBirth || ""}
+            onChange={(e) =>
+              onChange && onChange("dateOfBirth", e.target.value)
+            }
+            max={new Date().toISOString().split("T")[0]} // Prevent future dates
             className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl
                      focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50
-                     text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300"
+                     text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300
+                     [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
           />
-          <p className="text-xs text-gray-400 mt-1">Optional - helps us provide age-appropriate recommendations</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Required for age verification purposes
+          </p>
         </div>
       </div>
 
@@ -180,10 +207,14 @@ const PersonalInformation = ({ data, onChange }) => {
             <Mail className="w-4 h-4 text-blue-400" />
           </div>
           <div className="flex-1">
-            <h4 className="text-sm font-medium text-blue-300 mb-1">Account Information</h4>
+            <h4 className="text-sm font-medium text-blue-300 mb-1">
+              Account Information
+            </h4>
             <p className="text-xs text-blue-200/80 leading-relaxed">
-              Your name and email are automatically synced from your account. To update this information, 
-              please contact our support team or update your account through the authentication provider.
+              Your name and email are automatically synced from the customers
+              collection. To update this information, please contact our support
+              team as these fields are protected for security and verification
+              purposes.
             </p>
           </div>
         </div>

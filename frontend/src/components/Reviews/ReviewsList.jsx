@@ -1,9 +1,9 @@
-// ReviewsList.jsx - List component for displaying reviews (FIXED DATE HANDLING)
+// ReviewsList.jsx - List component for displaying reviews with full transparency
 import React from "react";
 import { Star, Calendar, Package, MapPin, Clock, User } from "lucide-react";
 
 const ReviewsList = ({ reviews, isVisible, viewMode = "all", currentUser }) => {
-  // FIXED: Enhanced helper function to format date with better error handling
+  // Enhanced helper function to format date with better error handling
   const formatDate = (date) => {
     if (!date) return "N/A";
 
@@ -14,18 +14,14 @@ const ReviewsList = ({ reviews, isVisible, viewMode = "all", currentUser }) => {
       if (date instanceof Date) {
         dateObj = date;
       } else if (typeof date === "string") {
-        // Handle empty strings
         if (date.trim() === "") return "N/A";
         dateObj = new Date(date);
       } else if (typeof date === "number") {
-        // Handle timestamps
         dateObj = new Date(date);
       } else if (date && typeof date === "object") {
-        // Handle Firestore Timestamp objects
         if (date.toDate && typeof date.toDate === "function") {
           dateObj = date.toDate();
         } else if (date.seconds) {
-          // Handle Firestore timestamp with seconds property
           dateObj = new Date(date.seconds * 1000);
         } else {
           return "N/A";
@@ -72,7 +68,6 @@ const ReviewsList = ({ reviews, isVisible, viewMode = "all", currentUser }) => {
 
   // Helper function to render star rating
   const renderStars = (rating) => {
-    // Ensure rating is a valid number
     const validRating =
       typeof rating === "number" && !isNaN(rating)
         ? Math.max(0, Math.min(5, rating))
@@ -96,12 +91,11 @@ const ReviewsList = ({ reviews, isVisible, viewMode = "all", currentUser }) => {
     );
   };
 
-  // Helper function to get reviewer info display
+  // Helper function to get reviewer info display with FULL TRANSPARENCY
   const getReviewerDisplay = (review) => {
-    if (
-      viewMode === "my" ||
-      (currentUser && review.firebaseUid === currentUser.uid)
-    ) {
+    const isOwnReview = currentUser && review.firebaseUid === currentUser.uid;
+
+    if (isOwnReview) {
       return {
         name: "You",
         isCurrentUser: true,
@@ -109,9 +103,15 @@ const ReviewsList = ({ reviews, isVisible, viewMode = "all", currentUser }) => {
         bgColor: "bg-purple-500/20",
       };
     } else {
-      // For public reviews, show anonymous/masked info
+      // Show real customer name with full transparency
+      const displayName =
+        review.customerName ||
+        review.reviewerName ||
+        (review.customerEmail ? review.customerEmail.split("@")[0] : null) ||
+        "Anonymous Customer";
+
       return {
-        name: review.reviewerName || "Anonymous Customer",
+        name: displayName,
         isCurrentUser: false,
         color: "text-blue-400",
         bgColor: "bg-blue-500/20",
@@ -119,7 +119,7 @@ const ReviewsList = ({ reviews, isVisible, viewMode = "all", currentUser }) => {
     }
   };
 
-  // FIXED: Add safety check for reviews array
+  // Safety check for reviews array
   if (!reviews || !Array.isArray(reviews) || reviews.length === 0) {
     const emptyMessage =
       viewMode === "my"
@@ -153,7 +153,7 @@ const ReviewsList = ({ reviews, isVisible, viewMode = "all", currentUser }) => {
       <div className="grid gap-6">
         {reviews
           .map((review, index) => {
-            // FIXED: Add safety checks for review object
+            // Add safety checks for review object
             if (!review || !review.id) {
               console.warn("Invalid review object at index:", index, review);
               return null;
@@ -364,8 +364,7 @@ const ReviewsList = ({ reviews, isVisible, viewMode = "all", currentUser }) => {
               </div>
             );
           })
-          .filter(Boolean)}{" "}
-        {/* Filter out null values */}
+          .filter(Boolean)}
       </div>
 
       {/* Load More Button (if needed for pagination) */}

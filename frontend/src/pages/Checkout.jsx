@@ -112,6 +112,10 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     newsletter: false,
     specialInstructions: "",
     termsAccepted: false,
+    idSubmitted: false,
+    usingSavedId: false, // ADD THIS
+    uploadNewId: false, // ADD THIS
+    savedIdUrl: "",
   });
 
   // Update form data when customer data is loaded
@@ -405,6 +409,9 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
               rentalItems={rentalItems}
               // FIXED: Remove hasCameraRental, keep form submission handler
               onGoogleFormSubmission={handleGoogleFormSubmission}
+              setFormData={setFormData} // ADD THIS
+              setErrors={setErrors}
+              savedIdUrl={customerData?.idVerification?.documentUrl || ""}
             />
 
             {/* Order Summary Sidebar */}
