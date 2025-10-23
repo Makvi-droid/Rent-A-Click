@@ -29,6 +29,7 @@ import {
   CheckCircle,
   Clock,
   XCircle,
+  Contact,
 } from "lucide-react";
 
 // Role permissions
@@ -42,6 +43,7 @@ const rolePermissions = {
     "analytics",
     "settings",
     "notifications",
+    "contact",
   ],
   manager: ["analytics", "users"],
   inventory: ["inventory", "products"],
@@ -96,6 +98,12 @@ const Sidebar = ({
       id: "analytics",
       label: "Sales & Analytics",
       icon: BarChart3,
+      color: "text-indigo-600",
+    },
+    {
+      id: "contact",
+      label: "Contact Support",
+      icon: Contact,
       color: "text-indigo-600",
     },
     {

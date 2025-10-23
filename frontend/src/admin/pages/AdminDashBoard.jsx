@@ -11,6 +11,7 @@ import OrderManagement from "./OrderManagement";
 import EmployeeManagement from "./EmployeeManagement";
 import CustomerManagemet from "./CustomerManagement";
 import Analytics from "./Analytics";
+import Contact from "./Contact";
 
 const AdminDashboard = () => {
   const mockUser = {
@@ -52,6 +53,8 @@ const AdminDashboard = () => {
         return <ComingSoon title="Settings" />;
       case "notifications":
         return <ComingSoon title="Notifications" />;
+      case "contact":
+        return <Contact />;
       case "customers":
         return <CustomerManagemet />;
       default:

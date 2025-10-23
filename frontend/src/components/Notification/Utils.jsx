@@ -1,10 +1,12 @@
-import { Package, Gift, CreditCard, Bell } from "lucide-react";
+// components/Notification/Utils.js
+// UPDATED: Added "support" type for admin responses
+import { Package, Gift, CreditCard, Bell, MessageCircle } from "lucide-react";
 
 export const getTypeIcon = (type) => {
   const iconClass = "w-4 h-4";
   switch (type) {
     case "orders":
-    case "order": // Support both formats
+    case "order":
       return <Package className={iconClass} />;
     case "promotions":
     case "promotion":
@@ -12,6 +14,8 @@ export const getTypeIcon = (type) => {
     case "billing":
     case "payment":
       return <CreditCard className={iconClass} />;
+    case "support":
+      return <MessageCircle className={iconClass} />;
     default:
       return <Bell className={iconClass} />;
   }
@@ -28,6 +32,8 @@ export const getTypeColor = (type, isDarkMode) => {
     case "billing":
     case "payment":
       return isDarkMode ? "text-purple-400" : "text-purple-600";
+    case "support":
+      return isDarkMode ? "text-pink-400" : "text-pink-600";
     default:
       return isDarkMode ? "text-gray-400" : "text-gray-600";
   }
@@ -45,6 +51,7 @@ export const getNotificationCounts = (notifications) => {
     billing: notifications.filter(
       (n) => n.type === "billing" || n.type === "payment"
     ).length,
+    support: notifications.filter((n) => n.type === "support").length,
   };
 };
 
@@ -72,6 +79,10 @@ export const getTypeBadgeColor = (type, isDarkMode) => {
           ? "bg-purple-900 text-purple-200"
           : "bg-purple-100 text-purple-800"
       }`;
+    case "support":
+      return `${baseClasses} ${
+        isDarkMode ? "bg-pink-900 text-pink-200" : "bg-pink-100 text-pink-800"
+      }`;
     default:
       return `${baseClasses} ${
         isDarkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-800"
@@ -91,6 +102,8 @@ export const getTypeDisplayName = (type) => {
     case "billing":
     case "payment":
       return "Billing";
+    case "support":
+      return "Support";
     default:
       return "Notification";
   }
