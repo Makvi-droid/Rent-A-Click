@@ -9,6 +9,8 @@ import Header from "../../components/admin/Header";
 import Inventory from "./Inventory";
 import OrderManagement from "./OrderManagement";
 import EmployeeManagement from "./EmployeeManagement";
+import CustomerManagemet from "./CustomerManagement";
+import Analytics from "./Analytics";
 
 const AdminDashboard = () => {
   const mockUser = {
@@ -45,11 +47,13 @@ const AdminDashboard = () => {
       case "Employees":
         return <EmployeeManagement />;
       case "analytics":
-        return <ComingSoon title="Analytics & Reports" />;
+        return <Analytics />;
       case "settings":
         return <ComingSoon title="Settings" />;
       case "notifications":
         return <ComingSoon title="Notifications" />;
+      case "customers":
+        return <CustomerManagemet />;
       default:
         return <Dashboard stats={mockStats} />;
     }

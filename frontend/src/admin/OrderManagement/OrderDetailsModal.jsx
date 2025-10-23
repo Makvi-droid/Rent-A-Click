@@ -76,8 +76,21 @@ const OrderDetailsModal = ({
         returnedAt: order.returnedAt || null,
         physicalIdShown: Boolean(order.physicalIdShown),
       });
+      // Reset editing states when order changes
+      setIsEditing({
+        status: false,
+        payment: false,
+        returned: false,
+        physicalId: false,
+      });
     }
-  }, [order]);
+  }, [
+    order,
+    order?.status,
+    order?.paymentStatus,
+    order?.itemReturned,
+    order?.physicalIdShown,
+  ]);
 
   useEffect(() => {
     if (isOpen) {
