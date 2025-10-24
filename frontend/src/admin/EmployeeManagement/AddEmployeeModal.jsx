@@ -4,10 +4,12 @@ import {
   User,
   Mail,
   Phone,
-  Building,
   Shield,
   Save,
   Send,
+  RefreshCw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
@@ -27,42 +29,35 @@ import { toast } from "react-hot-toast";
 import { createAuditLog } from "../../utils/auditLogger";
 
 const schema = yup.object({
-  firstName: yup.string().required("First name is required"),
-  lastName: yup.string().required("Last name is required"),
   email: yup.string().email("Invalid email").required("Email is required"),
   phone: yup.string(),
-  department: yup.string().required("Department is required"),
   roleId: yup.string().required("Role is required"),
-  startDate: yup.date().required("Start date is required"),
-  salary: yup.number().positive("Salary must be positive"),
-  manager: yup.string(),
   notes: yup.string(),
 });
 
 const AddEmployeeModal = ({ isOpen, onClose }) => {
   const [roles, setRoles] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sendInvite, setSendInvite] = useState(true);
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
-    watch,
   } = useForm({
     resolver: yupResolver(schema),
     defaultValues: {
       status: "pending",
-      startDate: new Date().toISOString().split("T")[0],
     },
   });
 
   useEffect(() => {
     if (isOpen) {
       fetchRoles();
-      fetchEmployees();
+      generatePassword();
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "unset";
@@ -86,17 +81,27 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const fetchEmployees = async () => {
-    try {
-      const employeesSnapshot = await getDocs(collection(db, "employees"));
-      const employeesData = employeesSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setEmployees(employeesData);
-    } catch (error) {
-      console.error("Error fetching employees:", error);
+  const generatePassword = () => {
+    const length = 12;
+    const charset =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let password = "";
+
+    password += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+    password += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
+    password += "0123456789"[Math.floor(Math.random() * 10)];
+    password += "!@#$%^&*"[Math.floor(Math.random() * 8)];
+
+    for (let i = password.length; i < length; i++) {
+      password += charset[Math.floor(Math.random() * charset.length)];
     }
+
+    password = password
+      .split("")
+      .sort(() => Math.random() - 0.5)
+      .join("");
+
+    setTemporaryPassword(password);
   };
 
   const generateEmployeeId = async () => {
@@ -118,9 +123,8 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const sendInvitationEmail = async (employeeData) => {
+  const sendInvitationEmail = async (employeeData, docRefId) => {
     try {
-      // Check if running in development mode without Netlify Dev
       const isDevelopment = import.meta.env.DEV;
       const isNetlifyDev = window.location.port === "8888";
 
@@ -130,7 +134,9 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
           "📧 Development Mode - Email would be sent to:",
           employeeData.email
         );
-        console.log("Employee Data:", employeeData);
+        console.log("Login Credentials:");
+        console.log("  Email:", employeeData.email);
+        console.log("  Temporary Password:", employeeData.temporaryPassword);
 
         toast.success(
           `[DEV MODE] Email simulation successful for ${employeeData.email}`,
@@ -139,7 +145,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
           }
         );
 
-        // Still create the invitation record
+        // Create the invitation record
         const invitationData = {
           email: employeeData.email,
           employeeId: employeeData.employeeId,
@@ -153,10 +159,16 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
         await addDoc(collection(db, "employeeInvitations"), invitationData);
 
+        // Fixed: Use docRefId instead of employeeData.employeeId
         await createAuditLog({
           action: "SEND_INVITATION",
-          targetId: employeeData.employeeId,
-          details: { email: employeeData.email, mode: "development" },
+          targetType: "employee",
+          targetId: docRefId, // Use the Firestore document ID
+          details: {
+            email: employeeData.email,
+            employeeId: employeeData.employeeId,
+            mode: "development",
+          },
           timestamp: new Date(),
         });
 
@@ -165,7 +177,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
       // Production or Netlify Dev - actually send email
       const response = await fetch(
-        "/.netlify/functions/send-employee-invitation",
+        "/.netlify/functions/send-employee-invitation", // Fixed: removed .js extension
         {
           method: "POST",
           headers: {
@@ -174,11 +186,9 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
           body: JSON.stringify({
             email: employeeData.email,
             employeeId: employeeData.employeeId,
-            firstName: employeeData.firstName,
-            lastName: employeeData.lastName,
             roleName: roles.find((r) => r.id === employeeData.roleId)?.name,
-            startDate: employeeData.startDate,
             invitedBy: auth.currentUser?.email,
+            temporaryPassword: employeeData.temporaryPassword,
           }),
         }
       );
@@ -197,7 +207,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         invitedBy: auth.currentUser?.email,
         invitedAt: new Date(),
         status: "sent",
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         emailId: result.emailId,
       };
 
@@ -205,16 +215,22 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
       toast.success(`Invitation email sent to ${employeeData.email}`);
 
+      // Fixed: Use docRefId instead of employeeData.employeeId
       await createAuditLog({
         action: "SEND_INVITATION",
-        targetId: employeeData.employeeId,
-        details: { email: employeeData.email, emailId: result.emailId },
+        targetType: "employee",
+        targetId: docRefId, // Use the Firestore document ID
+        details: {
+          email: employeeData.email,
+          employeeId: employeeData.employeeId,
+          emailId: result.emailId,
+        },
         timestamp: new Date(),
       });
     } catch (error) {
       console.error("Error sending invitation:", error);
       toast.error(`Failed to send invitation: ${error.message}`);
-      throw error; // Re-throw to handle in onSubmit
+      throw error;
     }
   };
 
@@ -226,6 +242,8 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
       const employeeData = {
         ...data,
         employeeId,
+        temporaryPassword,
+        passwordChangeRequired: true,
         createdAt: new Date(),
         updatedAt: new Date(),
         status: sendInvite ? "pending" : data.status || "active",
@@ -233,19 +251,26 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
       const docRef = await addDoc(collection(db, "employees"), employeeData);
 
+      // Fixed: Use docRef.id for audit log
       await createAuditLog({
         action: "CREATE_EMPLOYEE",
-        targetId: docRef.id,
+        targetType: "employee",
+        targetId: docRef.id, // Use the Firestore document ID
         details: { employeeId, email: data.email },
         timestamp: new Date(),
       });
 
       if (sendInvite) {
-        await sendInvitationEmail({ ...employeeData, id: docRef.id });
+        // Pass the document ID to sendInvitationEmail
+        await sendInvitationEmail(
+          { ...employeeData, id: docRef.id },
+          docRef.id
+        );
       }
 
       toast.success("Employee added successfully!");
       reset();
+      setTemporaryPassword("");
       onClose();
     } catch (error) {
       console.error("Error adding employee:", error);
@@ -260,17 +285,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
       onClose();
     }
   };
-
-  const departments = [
-    "IT",
-    "HR",
-    "Finance",
-    "Marketing",
-    "Operations",
-    "Sales",
-    "Legal",
-    "Customer Service",
-  ];
 
   if (!isOpen) {
     return null;
@@ -310,167 +324,98 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  First Name *
-                </label>
-                <input
-                  {...register("firstName")}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                {errors.firstName && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.firstName.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Last Name *
-                </label>
-                <input
-                  {...register("lastName")}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                {errors.lastName && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.lastName.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <Mail className="inline h-4 w-4 mr-1" />
-                  Email *
-                </label>
-                <input
-                  {...register("email")}
-                  type="email"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                {errors.email && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <Phone className="inline h-4 w-4 mr-1" />
-                  Phone
-                </label>
-                <input
-                  {...register("phone")}
-                  type="tel"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <Building className="inline h-4 w-4 mr-1" />
-                  Department *
-                </label>
-                <select
-                  {...register("department")}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Department</option>
-                  {departments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
-                </select>
-                {errors.department && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.department.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <Shield className="inline h-4 w-4 mr-1" />
-                  Role *
-                </label>
-                <select
-                  {...register("roleId")}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Role</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.roleId && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.roleId.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Start Date *
-                </label>
-                <input
-                  {...register("startDate")}
-                  type="date"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                {errors.startDate && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.startDate.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Salary (Annual)
-                </label>
-                <input
-                  {...register("salary")}
-                  type="number"
-                  placeholder="50000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                {errors.salary && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.salary.message}
-                  </p>
-                )}
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <Mail className="inline h-4 w-4 mr-1" />
+                Email *
+              </label>
+              <input
+                {...register("email")}
+                type="email"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="employee@company.com"
+              />
+              {errors.email && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reports To (Manager)
+                <Phone className="inline h-4 w-4 mr-1" />
+                Phone
+              </label>
+              <input
+                {...register("phone")}
+                type="tel"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="+1 (555) 123-4567"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <Shield className="inline h-4 w-4 mr-1" />
+                Role *
               </label>
               <select
-                {...register("manager")}
+                {...register("roleId")}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">Select Manager</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName} ({emp.employeeId})
+                <option value="">Select Role</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
                   </option>
                 ))}
               </select>
+              {errors.roleId && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.roleId.message}
+                </p>
+              )}
+            </div>
+
+            {/* Temporary Password Display */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-blue-900">
+                  🔐 Temporary Password
+                </label>
+                <button
+                  type="button"
+                  onClick={generatePassword}
+                  className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Regenerate
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={temporaryPassword}
+                  readOnly
+                  className="w-full px-3 py-2 pr-10 bg-white border border-blue-300 rounded-md font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-blue-600 hover:text-blue-800"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-blue-700 mt-2">
+                This password will be sent to the employee via email. They will
+                be required to change it on first login.
+              </p>
             </div>
 
             <div>
@@ -493,7 +438,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label className="ml-2 text-sm text-gray-700">
-                Send invitation email with login instructions
+                Send invitation email with login credentials
               </label>
             </div>
 
