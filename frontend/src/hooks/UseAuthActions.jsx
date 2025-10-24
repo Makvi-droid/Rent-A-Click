@@ -1,4 +1,4 @@
-// hooks/UseAuthActions.js - Updated for Google 2FA integration
+// hooks/UseAuthActions.js - Updated for Admin/Customer/Employee authentication
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -23,6 +23,7 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
+import bcrypt from "bcryptjs";
 
 function UseAuthActions({
   formData,
@@ -44,7 +45,7 @@ function UseAuthActions({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingEmailData, setPendingEmailData] = useState(null);
 
-  // Keep 2FA related state only for email/password users
+  // Keep 2FA related state only for email/password customers
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [pending2FAUser, setPending2FAUser] = useState(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
@@ -55,14 +56,12 @@ function UseAuthActions({
   const emailCheckTimeoutRef = useRef(null);
   const lastCheckedEmailRef = useRef("");
 
-  // Generate and send 2FA code (only for email/password users)
+  // Generate and send 2FA code (only for email/password customers)
   const generateAndSend2FACode = async (user, customerData) => {
     try {
-      // Generate 6-digit code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-      // Store in Firestore temporarily
       const verificationRef = doc(firestore, "temp_2fa_codes", user.uid);
       await setDoc(verificationRef, {
         code: code,
@@ -73,10 +72,8 @@ function UseAuthActions({
         createdAt: serverTimestamp(),
       });
 
-      // In a real app, you'd send this via email service (SendGrid, etc.)
       console.log(`2FA Code for ${user.email}: ${code}`);
 
-      // Show in development (remove in production)
       if (process.env.NODE_ENV === "development") {
         showInfo(`Development Mode - 2FA Code: ${code}`, 15000);
       }
@@ -89,7 +86,7 @@ function UseAuthActions({
     }
   };
 
-  // Verify 2FA code (only for email/password users)
+  // Verify 2FA code (only for email/password customers)
   const verify2FACode = async (user, inputCode) => {
     try {
       const verificationRef = doc(firestore, "temp_2fa_codes", user.uid);
@@ -106,7 +103,6 @@ function UseAuthActions({
       const now = new Date();
       const expiresAt = verificationData.expiresAt.toDate();
 
-      // Check if code expired
       if (now > expiresAt) {
         setTwoFactorError(
           "Verification code expired. Please request a new one."
@@ -115,7 +111,6 @@ function UseAuthActions({
         return false;
       }
 
-      // Check attempts
       if (verificationData.attempts >= verificationData.maxAttempts) {
         setTwoFactorError(
           "Too many failed attempts. Please request a new code."
@@ -124,7 +119,6 @@ function UseAuthActions({
         return false;
       }
 
-      // Verify code
       if (inputCode !== verificationData.code) {
         await setDoc(verificationRef, {
           ...verificationData,
@@ -139,7 +133,6 @@ function UseAuthActions({
         return false;
       }
 
-      // Code is valid - clean up
       await verificationRef.delete();
       return true;
     } catch (error) {
@@ -149,7 +142,7 @@ function UseAuthActions({
     }
   };
 
-  // Handle 2FA code submission (only for email/password users)
+  // Handle 2FA code submission (only for email/password customers)
   const handle2FASubmit = async () => {
     if (!twoFactorCode || twoFactorCode.length !== 6) {
       setTwoFactorError("Please enter a 6-digit verification code.");
@@ -170,7 +163,8 @@ function UseAuthActions({
         showSuccess("2FA verification successful!", 3000);
         await completeLoginProcess(
           pending2FAUser.user,
-          pending2FAUser.customerData,
+          pending2FAUser.userData,
+          pending2FAUser.userType,
           pending2FAUser.isNewUser
         );
       }
@@ -182,14 +176,14 @@ function UseAuthActions({
     }
   };
 
-  // Resend 2FA code (only for email/password users)
+  // Resend 2FA code (only for email/password customers)
   const resend2FACode = async () => {
     if (resendCooldown > 0) return;
 
     try {
       const success = await generateAndSend2FACode(
         pending2FAUser.user,
-        pending2FAUser.customerData
+        pending2FAUser.userData
       );
       if (success) {
         showInfo("New verification code sent!", 3000);
@@ -211,44 +205,219 @@ function UseAuthActions({
     }
   };
 
-  // Complete login process
-  const completeLoginProcess = async (user, customerData, isNewUser) => {
+  // NEW: Find employee by email
+  const findEmployeeByEmail = async (email) => {
     try {
-      await updateCustomerLogin(customerData.id);
+      console.log("Searching for employee with email:", email);
+
+      const employeesRef = collection(firestore, "employees");
+      const q = query(employeesRef, where("email", "==", email.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const employeeDoc = querySnapshot.docs[0];
+        const employeeData = { id: employeeDoc.id, ...employeeDoc.data() };
+        console.log("Found employee:", employeeDoc.id);
+        return employeeData;
+      }
+
+      console.log("No employee found with email");
+      return null;
+    } catch (error) {
+      console.error("Error finding employee:", error);
+      return null;
+    }
+  };
+
+  // NEW: Verify employee password using bcrypt
+  const verifyEmployeePassword = async (plainPassword, hashedPassword) => {
+    try {
+      const isMatch = await bcrypt.compare(plainPassword, hashedPassword);
+      return isMatch;
+    } catch (error) {
+      console.error("Error verifying employee password:", error);
+      return false;
+    }
+  };
+
+  // NEW: Check user role and return user type with data
+  const identifyUserRole = async (user) => {
+    try {
+      console.log("=== IDENTIFYING USER ROLE ===");
+      console.log("Firebase UID:", user.uid);
+      console.log("Email:", user.email);
+
+      // 1. Check if admin
+      const adminRef = doc(firestore, "admin", user.uid);
+      const adminSnap = await getDoc(adminRef);
+
+      if (adminSnap.exists()) {
+        console.log("✅ User is ADMIN");
+
+        // Check if admin is also an employee
+        const employeeData = await findEmployeeByEmail(user.email);
+        if (employeeData) {
+          console.log("✅ Admin is also an EMPLOYEE:", employeeData.employeeId);
+          return {
+            type: "admin",
+            data: { ...adminSnap.data(), employeeData },
+            isAdmin: true,
+            isEmployee: true,
+          };
+        }
+
+        return {
+          type: "admin",
+          data: adminSnap.data(),
+          isAdmin: true,
+          isEmployee: false,
+        };
+      }
+
+      // 2. Check if employee
+      const employeeData = await findEmployeeByEmail(user.email);
+      if (employeeData) {
+        console.log("✅ User is EMPLOYEE:", employeeData.employeeId);
+
+        // Check employee status
+        if (employeeData.status !== "active") {
+          throw new Error(
+            "Employee account is not active. Please contact administrator."
+          );
+        }
+
+        return {
+          type: "employee",
+          data: employeeData,
+          isAdmin: false,
+          isEmployee: true,
+        };
+      }
+
+      // 3. Default to customer
+      const customerData = await findCustomerByFirebaseUid(user.uid);
+      if (customerData) {
+        console.log("✅ User is CUSTOMER:", customerData.id);
+        return {
+          type: "customer",
+          data: customerData,
+          isAdmin: false,
+          isEmployee: false,
+        };
+      }
+
+      console.log("❌ No user data found for:", user.email);
+      return null;
+    } catch (error) {
+      console.error("Error identifying user role:", error);
+      throw error;
+    }
+  };
+
+  // UPDATED: Complete login process with user type
+  const completeLoginProcess = async (
+    user,
+    userData,
+    userType,
+    isNewUser = false
+  ) => {
+    try {
+      console.log("=== COMPLETING LOGIN PROCESS ===");
+      console.log("User Type:", userType);
+      console.log("User Data:", userData);
+
+      // Update last login for customers and employees
+      if (userType === "customer" && userData.id) {
+        await updateCustomerLogin(userData.id);
+      } else if (userType === "employee" && userData.id) {
+        await updateEmployeeLogin(userData.id);
+      }
+
       setLoginAttempts(0);
 
-      const welcomeMessage = isNewUser
-        ? `Welcome ${
-            customerData.fullName || user.displayName || "User"
-          }! Your customer ID is ${customerData.id}.`
-        : `Welcome back ${
-            customerData.fullName || user.displayName || "User"
-          }!`;
+      // Prepare welcome message
+      let welcomeMessage = "";
+      let displayName = user.displayName || user.email;
 
-      await checkAdminAndNavigate(user, welcomeMessage, isNewUser);
+      if (userType === "admin") {
+        displayName = userData.employeeData
+          ? `${userData.employeeData.firstName || ""} ${
+              userData.employeeData.lastName || ""
+            }`.trim() || user.email
+          : user.email;
+        welcomeMessage = isNewUser
+          ? `Welcome Admin ${displayName}!`
+          : `Welcome back Admin ${displayName}!`;
+      } else if (userType === "employee") {
+        displayName =
+          `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
+          user.email;
+        welcomeMessage = isNewUser
+          ? `Welcome ${displayName}! Employee ID: ${userData.employeeId}`
+          : `Welcome back ${displayName}!`;
+      } else {
+        displayName = userData.fullName || user.displayName || user.email;
+        welcomeMessage = isNewUser
+          ? `Welcome ${displayName}! Your customer ID is ${userData.id}.`
+          : `Welcome back ${displayName}!`;
+      }
+
+      await navigateUserToDashboard(userType, welcomeMessage);
     } catch (error) {
       console.error("Error completing login:", error);
       showError("Login completion failed. Please try again.", 5000);
     }
   };
 
-  // UPDATED: Handle post authentication - only use custom 2FA for email/password users
+  // NEW: Navigate user based on role
+  const navigateUserToDashboard = async (userType, welcomeMessage) => {
+    try {
+      showSuccess(welcomeMessage, 4000);
+
+      if (userType === "admin" || userType === "employee") {
+        setTimeout(() => navigate("/adminDashboard"), 1500);
+      } else {
+        setTimeout(() => navigate("/homePage"), 1500);
+      }
+    } catch (error) {
+      console.error("Error navigating user:", error);
+      showError("Navigation failed. Please try again.", 5000);
+    }
+  };
+
+  // NEW: Update employee last login
+  const updateEmployeeLogin = async (employeeId) => {
+    try {
+      const employeeRef = doc(firestore, "employees", employeeId);
+      await setDoc(
+        employeeRef,
+        {
+          lastLoginAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error("Error updating employee login:", error);
+    }
+  };
+
+  // UPDATED: Handle post authentication for all user types
   const handlePostAuthentication = async (
     user,
-    customerData,
+    userRole,
     isNewUser = false,
     provider = "email"
   ) => {
     try {
       console.log("=== POST AUTHENTICATION DEBUG ===");
       console.log("User email:", user.email);
-      console.log("Customer ID:", customerData.id);
+      console.log("User Type:", userRole.type);
       console.log("Provider:", provider);
-      console.log("Customer 2FA setting:", customerData.twoFA);
       console.log("Is new user:", isNewUser);
       console.log("================================");
 
-      // For Google users, skip custom 2FA - Google handles their own 2FA
+      // For Google users, skip custom 2FA
       if (provider === "google") {
         console.log(
           "✅ Google user - using Google's native 2FA, skipping custom 2FA"
@@ -257,21 +426,44 @@ function UseAuthActions({
           "Google authentication successful! Google's security features are active.",
           4000
         );
-        await completeLoginProcess(user, customerData, isNewUser);
+        await completeLoginProcess(
+          user,
+          userRole.data,
+          userRole.type,
+          isNewUser
+        );
         return;
       }
 
-      // Only check custom 2FA for email/password users
-      if (customerData.twoFA && provider === "email") {
-        console.log(
-          "🔐 Custom 2FA required for email/password user:",
-          user.email
+      // Employees never use custom 2FA
+      if (userRole.type === "employee" || userRole.type === "admin") {
+        console.log("✅ Employee/Admin - no custom 2FA required");
+        await completeLoginProcess(
+          user,
+          userRole.data,
+          userRole.type,
+          isNewUser
         );
+        return;
+      }
 
-        const codeGenerated = await generateAndSend2FACode(user, customerData);
+      // Only customers with 2FA enabled and email provider need custom 2FA
+      if (
+        userRole.type === "customer" &&
+        userRole.data.twoFA &&
+        provider === "email"
+      ) {
+        console.log("🔐 Custom 2FA required for customer:", user.email);
+
+        const codeGenerated = await generateAndSend2FACode(user, userRole.data);
 
         if (codeGenerated) {
-          setPending2FAUser({ user, customerData, isNewUser });
+          setPending2FAUser({
+            user,
+            userData: userRole.data,
+            userType: userRole.type,
+            isNewUser,
+          });
           setShow2FAModal(true);
           setTwoFactorCode("");
           setTwoFactorError("");
@@ -283,48 +475,17 @@ function UseAuthActions({
         }
       } else {
         // No custom 2FA required - proceed directly
-        console.log("✅ No custom 2FA required for user:", user.email);
-        await completeLoginProcess(user, customerData, isNewUser);
+        console.log("✅ No custom 2FA required");
+        await completeLoginProcess(
+          user,
+          userRole.data,
+          userRole.type,
+          isNewUser
+        );
       }
     } catch (error) {
       console.error("Post-authentication error:", error);
       showError("Authentication process failed. Please try again.", 5000);
-    }
-  };
-
-  // Check if user is admin and navigate accordingly
-  const checkAdminAndNavigate = async (
-    user,
-    welcomeMessage = null,
-    isNewUser = false
-  ) => {
-    try {
-      const adminRef = doc(firestore, "admin", user.uid);
-      const adminSnap = await getDoc(adminRef);
-
-      if (adminSnap.exists()) {
-        console.log("Admin user detected:", user.email);
-        if (welcomeMessage) {
-          const adminMessage = isNewUser
-            ? `${welcomeMessage} (Admin Access)`
-            : `${welcomeMessage} (Admin Access)`;
-          showSuccess(adminMessage, 4000);
-        }
-        setTimeout(() => navigate("/adminDashboard"), 1500);
-      } else {
-        console.log("Regular customer:", user.email);
-        if (welcomeMessage) {
-          showSuccess(welcomeMessage, 4000);
-        }
-        setTimeout(() => navigate("/homePage"), 1500);
-      }
-    } catch (error) {
-      console.error("Error checking admin status:", error);
-      showWarning(
-        "Unable to verify admin status. Proceeding as regular customer.",
-        4000
-      );
-      setTimeout(() => navigate("/homePage"), 1500);
     }
   };
 
@@ -388,7 +549,6 @@ function UseAuthActions({
         updatedAt: serverTimestamp(),
         provider: additionalData.provider || "email",
         role: "customer",
-        // Only enable custom 2FA for email/password users by default
         twoFA:
           additionalData.provider === "email"
             ? additionalData.twoFA || false
@@ -482,7 +642,6 @@ function UseAuthActions({
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
-    // Debounced email validation
     if (name === "email") {
       const trimmedEmail = value.toLowerCase().trim();
 
@@ -518,7 +677,7 @@ function UseAuthActions({
     }
   };
 
-  // UPDATED: Google SSO - relies on Google's native 2FA
+  // Google SSO
   const handleGoogleSSO = async () => {
     if (isLoading) return;
 
@@ -527,41 +686,38 @@ function UseAuthActions({
 
     try {
       const provider = new GoogleAuthProvider();
-      // Force account selection to ensure user can choose account with 2FA if needed
       provider.setCustomParameters({
         prompt: "select_account",
-        // You can also add hd parameter for G Suite domains if needed
-        // hd: "yourdomain.com"
       });
 
       console.log("Starting Google SSO flow...");
 
-      // Google handles their own 2FA during this step
-      // If user has 2FA enabled on Google, they'll be prompted before this resolves
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
       console.log("Google SSO - User authenticated:", user.email);
-      console.log(
-        "Google 2FA (if enabled) was handled by Google during sign-in"
-      );
 
-      // Check for existing customer
-      let existingCustomer = await findCustomerByFirebaseUid(user.uid);
+      // Identify user role
+      const userRole = await identifyUserRole(user);
 
-      if (!existingCustomer) {
+      if (!userRole) {
+        // New Google user - create as customer
         console.log("Creating new Google customer...");
-        existingCustomer = await createCustomerDocument(user, {
+        const newCustomer = await createCustomerDocument(user, {
           provider: "google",
-          twoFA: false, // Google users don't use our custom 2FA
+          twoFA: false,
         });
 
-        console.log("New Google customer created:", existingCustomer.id);
-        await handlePostAuthentication(user, existingCustomer, true, "google");
+        console.log("New Google customer created:", newCustomer.id);
+        await handlePostAuthentication(
+          user,
+          { type: "customer", data: newCustomer },
+          true,
+          "google"
+        );
       } else {
-        console.log("Existing Google customer found:", existingCustomer.id);
-        // Pass "google" as provider to skip custom 2FA
-        await handlePostAuthentication(user, existingCustomer, false, "google");
+        console.log(`Existing ${userRole.type} found`);
+        await handlePostAuthentication(user, userRole, false, "google");
       }
     } catch (error) {
       console.error("Google Sign-In error:", error);
@@ -639,7 +795,7 @@ function UseAuthActions({
     }
   };
 
-  // UPDATED: Main form submission - specify provider
+  // UPDATED: Main form submission with employee authentication
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -661,7 +817,7 @@ function UseAuthActions({
 
     try {
       if (isSignUp) {
-        // *** SIGN UP PROCESS ***
+        // *** SIGN UP PROCESS - Only for customers ***
         const emailCheck = await checkEmailExists(
           formData.email.toLowerCase().trim()
         );
@@ -704,7 +860,7 @@ function UseAuthActions({
           );
           await handlePostAuthentication(
             user,
-            existingCustomer,
+            { type: "customer", data: existingCustomer },
             false,
             "email"
           );
@@ -714,7 +870,7 @@ function UseAuthActions({
             phoneNumber: formData.phoneNumber?.trim() || "",
             agreeToTerms: formData.agreeToTerms || false,
             provider: "email",
-            twoFA: false, // New email accounts start with 2FA disabled
+            twoFA: false,
           });
 
           try {
@@ -722,21 +878,178 @@ function UseAuthActions({
             setEmailVerificationSent(true);
 
             console.log("New email customer created:", newCustomer.id);
-            await handlePostAuthentication(user, newCustomer, true, "email");
+            await handlePostAuthentication(
+              user,
+              { type: "customer", data: newCustomer },
+              true,
+              "email"
+            );
           } catch (verificationError) {
             console.warn(
               "Email verification failed:",
               verificationError.message
             );
-            await handlePostAuthentication(user, newCustomer, true, "email");
+            await handlePostAuthentication(
+              user,
+              { type: "customer", data: newCustomer },
+              true,
+              "email"
+            );
           }
         }
       } else {
-        // *** SIGN IN PROCESS ***
+        // *** SIGN IN PROCESS - For all user types ***
         const emailCheck = await checkEmailExists(
           formData.email.toLowerCase().trim()
         );
 
+        // Check if it's an employee trying to login
+        const employeeData = await findEmployeeByEmail(
+          formData.email.toLowerCase().trim()
+        );
+
+        if (employeeData) {
+          console.log("Employee login detected:", employeeData.employeeId);
+
+          // Verify employee password using bcrypt
+          const passwordMatch = await verifyEmployeePassword(
+            formData.password,
+            employeeData.hashedPassword
+          );
+
+          if (!passwordMatch) {
+            const newAttempts = loginAttempts + 1;
+            setLoginAttempts(newAttempts);
+
+            if (newAttempts >= 5) {
+              handleAccountLockout();
+            } else {
+              const remainingAttempts = 5 - newAttempts;
+              const errorMsg = `Incorrect password. ${remainingAttempts} attempt${
+                remainingAttempts !== 1 ? "s" : ""
+              } remaining.`;
+              setErrors({ submit: errorMsg });
+              showError(errorMsg, 5000);
+            }
+            setIsLoading(false);
+            return;
+          }
+
+          // Password correct - check if employee has Firebase account
+          if (employeeData.firebaseUid) {
+            // Employee has Firebase account - sign them in
+            try {
+              const userCredential = await signInWithEmailAndPassword(
+                auth,
+                formData.email.toLowerCase().trim(),
+                formData.password
+              );
+              const user = userCredential.user;
+
+              const userRole = await identifyUserRole(user);
+              setLoginAttempts(0);
+              await handlePostAuthentication(user, userRole, false, "email");
+            } catch (authError) {
+              console.error("Firebase auth error for employee:", authError);
+              showError("Authentication failed. Please try again.", 5000);
+              setIsLoading(false);
+              return;
+            }
+          } else {
+            // Employee doesn't have Firebase account yet - create one
+            console.log("Creating Firebase account for employee...");
+
+            try {
+              const userCredential = await createUserWithEmailAndPassword(
+                auth,
+                formData.email.toLowerCase().trim(),
+                formData.password
+              );
+              const user = userCredential.user;
+
+              // Update employee document with Firebase UID
+              const employeeRef = doc(firestore, "employees", employeeData.id);
+              await setDoc(
+                employeeRef,
+                {
+                  firebaseUid: user.uid,
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              );
+
+              console.log(
+                "Firebase account created for employee:",
+                employeeData.employeeId
+              );
+
+              const userRole = await identifyUserRole(user);
+              setLoginAttempts(0);
+              await handlePostAuthentication(user, userRole, true, "email");
+            } catch (createError) {
+              if (createError.code === "auth/email-already-in-use") {
+                // Email exists in Firebase but not linked to employee - try signing in
+                try {
+                  const userCredential = await signInWithEmailAndPassword(
+                    auth,
+                    formData.email.toLowerCase().trim(),
+                    formData.password
+                  );
+                  const user = userCredential.user;
+
+                  // Link Firebase UID to employee
+                  const employeeRef = doc(
+                    firestore,
+                    "employees",
+                    employeeData.id
+                  );
+                  await setDoc(
+                    employeeRef,
+                    {
+                      firebaseUid: user.uid,
+                      updatedAt: serverTimestamp(),
+                    },
+                    { merge: true }
+                  );
+
+                  const userRole = await identifyUserRole(user);
+                  setLoginAttempts(0);
+                  await handlePostAuthentication(
+                    user,
+                    userRole,
+                    false,
+                    "email"
+                  );
+                } catch (signInError) {
+                  console.error(
+                    "Error signing in existing Firebase user:",
+                    signInError
+                  );
+                  showError(
+                    "Authentication failed. Please contact administrator.",
+                    5000
+                  );
+                  setIsLoading(false);
+                  return;
+                }
+              } else {
+                console.error(
+                  "Error creating Firebase account for employee:",
+                  createError
+                );
+                showError(
+                  "Failed to create account. Please contact administrator.",
+                  5000
+                );
+                setIsLoading(false);
+                return;
+              }
+            }
+          }
+          return;
+        }
+
+        // Not an employee - proceed with regular Firebase auth
         if (
           emailCheck.exists &&
           emailCheck.isGoogleUser &&
@@ -761,27 +1074,18 @@ function UseAuthActions({
         );
         const user = userCredential.user;
 
-        const existingCustomer = await findCustomerByFirebaseUid(user.uid);
+        const userRole = await identifyUserRole(user);
 
-        if (existingCustomer) {
-          setLoginAttempts(0);
-          console.log("Customer signed in:", existingCustomer.id);
-
-          // Handle custom 2FA for email/password users
-          await handlePostAuthentication(
-            user,
-            existingCustomer,
-            false,
-            "email"
-          );
-        } else {
-          showError(
-            "Customer profile not found. Please contact support.",
-            6000
-          );
+        if (!userRole) {
+          showError("User profile not found. Please contact support.", 6000);
           setIsLoading(false);
           return;
         }
+
+        setLoginAttempts(0);
+        console.log(`${userRole.type} signed in`);
+
+        await handlePostAuthentication(user, userRole, false, "email");
       }
 
       // Reset form on success (only if not waiting for 2FA)
@@ -912,7 +1216,7 @@ function UseAuthActions({
     pendingEmailData,
     handleExistingEmailConfirmation,
     checkEmailExists,
-    // 2FA related returns (only for email/password users)
+    // 2FA related returns (only for email/password customers)
     show2FAModal,
     setShow2FAModal,
     twoFactorCode,

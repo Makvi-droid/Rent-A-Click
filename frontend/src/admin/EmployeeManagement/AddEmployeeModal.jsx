@@ -6,7 +6,6 @@ import {
   Phone,
   Shield,
   Save,
-  Send,
   RefreshCw,
   Eye,
   EyeOff,
@@ -27,6 +26,7 @@ import {
 import { auth, db } from "../../firebase";
 import { toast } from "react-hot-toast";
 import { createAuditLog } from "../../utils/auditLogger";
+import bcrypt from "bcryptjs";
 
 const schema = yup.object({
   email: yup.string().email("Invalid email").required("Email is required"),
@@ -38,7 +38,6 @@ const schema = yup.object({
 const AddEmployeeModal = ({ isOpen, onClose }) => {
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [sendInvite, setSendInvite] = useState(true);
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -50,7 +49,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
   } = useForm({
     resolver: yupResolver(schema),
     defaultValues: {
-      status: "pending",
+      status: "active",
     },
   });
 
@@ -112,163 +111,62 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
       let nextId = 1;
       if (counterDoc.exists()) {
         nextId = counterDoc.data().count + 1;
+        await updateDoc(counterRef, { count: increment(1) });
+      } else {
+        await setDoc(counterRef, { count: 1 });
       }
 
-      await updateDoc(counterRef, { count: increment(1) });
       return `EMP${nextId.toString().padStart(4, "0")}`;
     } catch (error) {
-      const counterRef = doc(db, "counters", "employeeId");
-      await setDoc(counterRef, { count: 1 });
-      return "EMP0001";
+      console.error("Error generating employee ID:", error);
+      throw error;
     }
   };
 
-  const sendInvitationEmail = async (employeeData, docRefId) => {
-    try {
-      const isDevelopment = import.meta.env.DEV;
-      const isNetlifyDev = window.location.port === "8888";
-
-      if (isDevelopment && !isNetlifyDev) {
-        // Development mode without Netlify - simulate email sending
-        console.log(
-          "📧 Development Mode - Email would be sent to:",
-          employeeData.email
-        );
-        console.log("Login Credentials:");
-        console.log("  Email:", employeeData.email);
-        console.log("  Temporary Password:", employeeData.temporaryPassword);
-
-        toast.success(
-          `[DEV MODE] Email simulation successful for ${employeeData.email}`,
-          {
-            duration: 4000,
-          }
-        );
-
-        // Create the invitation record
-        const invitationData = {
-          email: employeeData.email,
-          employeeId: employeeData.employeeId,
-          roleName: roles.find((r) => r.id === employeeData.roleId)?.name,
-          invitedBy: auth.currentUser?.email,
-          invitedAt: new Date(),
-          status: "sent",
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          emailId: "dev-simulation",
-        };
-
-        await addDoc(collection(db, "employeeInvitations"), invitationData);
-
-        // Fixed: Use docRefId instead of employeeData.employeeId
-        await createAuditLog({
-          action: "SEND_INVITATION",
-          targetType: "employee",
-          targetId: docRefId, // Use the Firestore document ID
-          details: {
-            email: employeeData.email,
-            employeeId: employeeData.employeeId,
-            mode: "development",
-          },
-          timestamp: new Date(),
-        });
-
-        return;
-      }
-
-      // Production or Netlify Dev - actually send email
-      const response = await fetch(
-        "/.netlify/functions/send-employee-invitation", // Fixed: removed .js extension
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: employeeData.email,
-            employeeId: employeeData.employeeId,
-            roleName: roles.find((r) => r.id === employeeData.roleId)?.name,
-            invitedBy: auth.currentUser?.email,
-            temporaryPassword: employeeData.temporaryPassword,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to send email");
-      }
-
-      // Create invitation record in Firestore
-      const invitationData = {
-        email: employeeData.email,
-        employeeId: employeeData.employeeId,
-        roleName: roles.find((r) => r.id === employeeData.roleId)?.name,
-        invitedBy: auth.currentUser?.email,
-        invitedAt: new Date(),
-        status: "sent",
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        emailId: result.emailId,
-      };
-
-      await addDoc(collection(db, "employeeInvitations"), invitationData);
-
-      toast.success(`Invitation email sent to ${employeeData.email}`);
-
-      // Fixed: Use docRefId instead of employeeData.employeeId
-      await createAuditLog({
-        action: "SEND_INVITATION",
-        targetType: "employee",
-        targetId: docRefId, // Use the Firestore document ID
-        details: {
-          email: employeeData.email,
-          employeeId: employeeData.employeeId,
-          emailId: result.emailId,
-        },
-        timestamp: new Date(),
-      });
-    } catch (error) {
-      console.error("Error sending invitation:", error);
-      toast.error(`Failed to send invitation: ${error.message}`);
-      throw error;
-    }
+  const hashPassword = async (password) => {
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    return hashedPassword;
   };
 
   const onSubmit = async (data) => {
     setLoading(true);
     try {
       const employeeId = await generateEmployeeId();
+      const hashedPassword = await hashPassword(temporaryPassword);
 
       const employeeData = {
         ...data,
         employeeId,
-        temporaryPassword,
+        hashedPassword,
         passwordChangeRequired: true,
         createdAt: new Date(),
         updatedAt: new Date(),
-        status: sendInvite ? "pending" : data.status || "active",
+        status: "active",
       };
 
       const docRef = await addDoc(collection(db, "employees"), employeeData);
 
-      // Fixed: Use docRef.id for audit log
       await createAuditLog({
         action: "CREATE_EMPLOYEE",
         targetType: "employee",
-        targetId: docRef.id, // Use the Firestore document ID
+        targetId: docRef.id,
         details: { employeeId, email: data.email },
         timestamp: new Date(),
       });
 
-      if (sendInvite) {
-        // Pass the document ID to sendInvitationEmail
-        await sendInvitationEmail(
-          { ...employeeData, id: docRef.id },
-          docRef.id
-        );
-      }
+      // Show password to admin before closing
+      toast.success(
+        `Employee added! Temporary password: ${temporaryPassword}`,
+        { duration: 10000 }
+      );
 
-      toast.success("Employee added successfully!");
+      console.log("Employee Created:");
+      console.log("Email:", data.email);
+      console.log("Employee ID:", employeeId);
+      console.log("Temporary Password:", temporaryPassword);
+      console.log("(Password is hashed in database)");
+
       reset();
       setTemporaryPassword("");
       onClose();
@@ -413,7 +311,8 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
                 </button>
               </div>
               <p className="text-xs text-blue-700 mt-2">
-                This password will be sent to the employee via email. They will
+                ⚠️ Save this password! It will be hashed in the database and
+                shown only once. The employee will need this to login and will
                 be required to change it on first login.
               </p>
             </div>
@@ -428,18 +327,6 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Additional notes about the employee..."
               />
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={sendInvite}
-                onChange={(e) => setSendInvite(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Send invitation email with login credentials
-              </label>
             </div>
 
             <div className="flex justify-end space-x-3 pt-6 border-t">
@@ -457,12 +344,10 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               >
                 {loading ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                ) : sendInvite ? (
-                  <Send className="h-4 w-4 mr-2" />
                 ) : (
                   <Save className="h-4 w-4 mr-2" />
                 )}
-                {sendInvite ? "Add & Send Invite" : "Add Employee"}
+                Add Employee
               </button>
             </div>
           </form>
