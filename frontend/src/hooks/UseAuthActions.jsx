@@ -1,4 +1,4 @@
-// hooks/UseAuthActions.js - Updated for Admin/Customer/Employee authentication
+// hooks/UseAuthActions.js - Fixed authentication for Admin/Employee/Customer
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -205,7 +205,7 @@ function UseAuthActions({
     }
   };
 
-  // NEW: Find employee by email
+  // Find employee by email
   const findEmployeeByEmail = async (email) => {
     try {
       console.log("Searching for employee with email:", email);
@@ -229,10 +229,15 @@ function UseAuthActions({
     }
   };
 
-  // NEW: Verify employee password using bcrypt
+  // Verify employee password using bcrypt
   const verifyEmployeePassword = async (plainPassword, hashedPassword) => {
     try {
+      console.log("Verifying employee password...");
+      console.log("Plain password length:", plainPassword?.length);
+      console.log("Hashed password exists:", !!hashedPassword);
+
       const isMatch = await bcrypt.compare(plainPassword, hashedPassword);
+      console.log("Password verification result:", isMatch);
       return isMatch;
     } catch (error) {
       console.error("Error verifying employee password:", error);
@@ -240,14 +245,14 @@ function UseAuthActions({
     }
   };
 
-  // NEW: Check user role and return user type with data
+  // FIXED: Check user role and return user type with data
   const identifyUserRole = async (user) => {
     try {
       console.log("=== IDENTIFYING USER ROLE ===");
       console.log("Firebase UID:", user.uid);
       console.log("Email:", user.email);
 
-      // 1. Check if admin
+      // 1. Check if admin first
       const adminRef = doc(firestore, "admin", user.uid);
       const adminSnap = await getDoc(adminRef);
 
@@ -274,7 +279,7 @@ function UseAuthActions({
         };
       }
 
-      // 2. Check if employee
+      // 2. Check if employee (ANY employee can access admin dashboard)
       const employeeData = await findEmployeeByEmail(user.email);
       if (employeeData) {
         console.log("✅ User is EMPLOYEE:", employeeData.employeeId);
@@ -286,6 +291,7 @@ function UseAuthActions({
           );
         }
 
+        // ✅ ALL employees can access admin dashboard
         return {
           type: "employee",
           data: employeeData,
@@ -369,14 +375,16 @@ function UseAuthActions({
     }
   };
 
-  // NEW: Navigate user based on role
+  // FIXED: Navigate ALL employees and admins to admin dashboard
   const navigateUserToDashboard = async (userType, welcomeMessage) => {
     try {
       showSuccess(welcomeMessage, 4000);
 
+      // ✅ Both admin AND employee go to admin dashboard
       if (userType === "admin" || userType === "employee") {
         setTimeout(() => navigate("/adminDashboard"), 1500);
       } else {
+        // Customers go to home page
         setTimeout(() => navigate("/homePage"), 1500);
       }
     } catch (error) {
@@ -385,7 +393,7 @@ function UseAuthActions({
     }
   };
 
-  // NEW: Update employee last login
+  // Update employee last login
   const updateEmployeeLogin = async (employeeId) => {
     try {
       const employeeRef = doc(firestore, "employees", employeeId);
@@ -402,7 +410,7 @@ function UseAuthActions({
     }
   };
 
-  // UPDATED: Handle post authentication for all user types
+  // Handle post authentication for all user types
   const handlePostAuthentication = async (
     user,
     userRole,
@@ -435,7 +443,7 @@ function UseAuthActions({
         return;
       }
 
-      // Employees never use custom 2FA
+      // ✅ Employees and Admins NEVER use custom 2FA
       if (userRole.type === "employee" || userRole.type === "admin") {
         console.log("✅ Employee/Admin - no custom 2FA required");
         await completeLoginProcess(
@@ -795,7 +803,7 @@ function UseAuthActions({
     }
   };
 
-  // UPDATED: Main form submission with employee authentication
+  // Main form submission with employee authentication
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -899,6 +907,9 @@ function UseAuthActions({
         }
       } else {
         // *** SIGN IN PROCESS - For all user types ***
+        console.log("=== SIGN IN PROCESS STARTED ===");
+        console.log("Email:", formData.email.toLowerCase().trim());
+
         const emailCheck = await checkEmailExists(
           formData.email.toLowerCase().trim()
         );
@@ -909,15 +920,34 @@ function UseAuthActions({
         );
 
         if (employeeData) {
-          console.log("Employee login detected:", employeeData.employeeId);
+          console.log("=== EMPLOYEE LOGIN DETECTED ===");
+          console.log("Employee ID:", employeeData.employeeId);
+          console.log("Employee Email:", employeeData.email);
+          console.log("Employee Status:", employeeData.status);
+          console.log("Has Firebase UID:", !!employeeData.firebaseUid);
+          console.log("Has Hashed Password:", !!employeeData.hashedPassword);
+
+          // Check employee status first
+          if (employeeData.status !== "active") {
+            showError(
+              "Employee account is not active. Please contact administrator.",
+              6000
+            );
+            setIsLoading(false);
+            return;
+          }
 
           // Verify employee password using bcrypt
+          console.log("Verifying password with bcrypt...");
           const passwordMatch = await verifyEmployeePassword(
             formData.password,
             employeeData.hashedPassword
           );
 
+          console.log("Password match result:", passwordMatch);
+
           if (!passwordMatch) {
+            console.log("❌ Password verification failed");
             const newAttempts = loginAttempts + 1;
             setLoginAttempts(newAttempts);
 
@@ -935,9 +965,16 @@ function UseAuthActions({
             return;
           }
 
-          // Password correct - check if employee has Firebase account
+          // ✅ Password is correct! Now handle Firebase authentication
+          console.log("✅ Password verified successfully!");
+
+          // Check if employee has Firebase account linked
           if (employeeData.firebaseUid) {
-            // Employee has Firebase account - sign them in
+            console.log(
+              "Employee has existing Firebase account, attempting sign in..."
+            );
+
+            // Try to sign in with Firebase using the SAME password
             try {
               const userCredential = await signInWithEmailAndPassword(
                 auth,
@@ -946,18 +983,42 @@ function UseAuthActions({
               );
               const user = userCredential.user;
 
+              console.log("✅ Firebase sign in successful");
+
               const userRole = await identifyUserRole(user);
               setLoginAttempts(0);
               await handlePostAuthentication(user, userRole, false, "email");
+              return;
             } catch (authError) {
-              console.error("Firebase auth error for employee:", authError);
-              showError("Authentication failed. Please try again.", 5000);
+              console.error("❌ Firebase auth error:", authError);
+
+              // Firebase password doesn't match - this shouldn't happen
+              if (
+                authError.code === "auth/wrong-password" ||
+                authError.code === "auth/invalid-credential"
+              ) {
+                console.log("⚠️ Firebase password mismatch detected");
+                showError(
+                  "Authentication error. Please contact administrator to reset your password.",
+                  6000
+                );
+              } else if (authError.code === "auth/user-not-found") {
+                console.log(
+                  "⚠️ Firebase user not found - employee firebaseUid may be incorrect"
+                );
+                showError(
+                  "Account configuration error. Please contact administrator.",
+                  6000
+                );
+              } else {
+                showError("Authentication failed. Please try again.", 5000);
+              }
               setIsLoading(false);
               return;
             }
           } else {
-            // Employee doesn't have Firebase account yet - create one
-            console.log("Creating Firebase account for employee...");
+            // Employee doesn't have Firebase account yet - create one with the SAME password
+            console.log("Creating new Firebase account for employee...");
 
             try {
               const userCredential = await createUserWithEmailAndPassword(
@@ -967,28 +1028,35 @@ function UseAuthActions({
               );
               const user = userCredential.user;
 
-              // Update employee document with Firebase UID
+              console.log("✅ Firebase account created:", user.uid);
+
+              // Link Firebase UID to employee document
               const employeeRef = doc(firestore, "employees", employeeData.id);
               await setDoc(
                 employeeRef,
                 {
                   firebaseUid: user.uid,
                   updatedAt: serverTimestamp(),
+                  lastLoginAt: serverTimestamp(),
                 },
                 { merge: true }
               );
 
-              console.log(
-                "Firebase account created for employee:",
-                employeeData.employeeId
-              );
+              console.log("✅ Firebase UID linked to employee document");
 
               const userRole = await identifyUserRole(user);
               setLoginAttempts(0);
               await handlePostAuthentication(user, userRole, true, "email");
+              return;
             } catch (createError) {
+              console.error("❌ Error creating Firebase account:", createError);
+
               if (createError.code === "auth/email-already-in-use") {
-                // Email exists in Firebase but not linked to employee - try signing in
+                // Firebase account exists but wasn't linked - try to sign in and link
+                console.log(
+                  "⚠️ Firebase account exists - attempting to sign in and link"
+                );
+
                 try {
                   const userCredential = await signInWithEmailAndPassword(
                     auth,
@@ -997,7 +1065,12 @@ function UseAuthActions({
                   );
                   const user = userCredential.user;
 
-                  // Link Firebase UID to employee
+                  console.log(
+                    "✅ Signed in with existing Firebase account:",
+                    user.uid
+                  );
+
+                  // Link the Firebase UID to employee
                   const employeeRef = doc(
                     firestore,
                     "employees",
@@ -1008,8 +1081,13 @@ function UseAuthActions({
                     {
                       firebaseUid: user.uid,
                       updatedAt: serverTimestamp(),
+                      lastLoginAt: serverTimestamp(),
                     },
                     { merge: true }
+                  );
+
+                  console.log(
+                    "✅ Existing Firebase account linked to employee"
                   );
 
                   const userRole = await identifyUserRole(user);
@@ -1020,36 +1098,47 @@ function UseAuthActions({
                     false,
                     "email"
                   );
+                  return;
                 } catch (signInError) {
                   console.error(
-                    "Error signing in existing Firebase user:",
+                    "❌ Error signing in with existing account:",
                     signInError
                   );
-                  showError(
-                    "Authentication failed. Please contact administrator.",
-                    5000
-                  );
+
+                  if (signInError.code === "auth/wrong-password") {
+                    showError(
+                      "A Firebase account exists with this email but with a different password. Please contact administrator to resolve this issue.",
+                      8000
+                    );
+                  } else {
+                    showError(
+                      "Authentication failed. Please contact administrator.",
+                      5000
+                    );
+                  }
                   setIsLoading(false);
                   return;
                 }
-              } else {
-                console.error(
-                  "Error creating Firebase account for employee:",
-                  createError
+              } else if (createError.code === "auth/weak-password") {
+                showError(
+                  "Password is too weak. Please contact administrator to reset your password with a stronger one.",
+                  6000
                 );
+              } else {
                 showError(
                   "Failed to create account. Please contact administrator.",
                   5000
                 );
-                setIsLoading(false);
-                return;
               }
+              setIsLoading(false);
+              return;
             }
           }
-          return;
         }
 
-        // Not an employee - proceed with regular Firebase auth
+        // Not an employee - proceed with regular Firebase auth for customers
+        console.log("Not an employee - proceeding with regular customer login");
+
         if (
           emailCheck.exists &&
           emailCheck.isGoogleUser &&

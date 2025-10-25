@@ -20,7 +20,6 @@ import {
   deleteDoc,
   query,
   orderBy,
-  where,
   onSnapshot,
 } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -95,6 +94,8 @@ const EmployeeList = ({ searchTerm, filters }) => {
 
   const handleStatusChange = async (employeeId, newStatus) => {
     try {
+      const employee = employees.find((emp) => emp.id === employeeId);
+
       await updateDoc(doc(db, "employees", employeeId), {
         status: newStatus,
         updatedAt: new Date(),
@@ -102,9 +103,13 @@ const EmployeeList = ({ searchTerm, filters }) => {
 
       await createAuditLog({
         action: "CHANGE_STATUS",
+        target: "employee",
         targetId: employeeId,
-        details: { newStatus },
-        timestamp: new Date(),
+        details: {
+          newStatus,
+          employeeId: employee?.employeeId,
+          name: `${employee?.firstName} ${employee?.lastName}`,
+        },
       });
 
       toast.success(`Employee status updated to ${newStatus}`);
@@ -118,6 +123,8 @@ const EmployeeList = ({ searchTerm, filters }) => {
   const handleSoftDelete = async (employeeId) => {
     if (window.confirm("Are you sure you want to archive this employee?")) {
       try {
+        const employee = employees.find((emp) => emp.id === employeeId);
+
         await updateDoc(doc(db, "employees", employeeId), {
           status: "archived",
           archivedAt: new Date(),
@@ -126,9 +133,13 @@ const EmployeeList = ({ searchTerm, filters }) => {
 
         await createAuditLog({
           action: "ARCHIVE_EMPLOYEE",
+          target: "employee",
           targetId: employeeId,
-          details: { reason: "Soft delete" },
-          timestamp: new Date(),
+          details: {
+            reason: "Soft delete",
+            employeeId: employee?.employeeId,
+            name: `${employee?.firstName} ${employee?.lastName}`,
+          },
         });
 
         toast.success("Employee archived successfully");
@@ -147,14 +158,20 @@ const EmployeeList = ({ searchTerm, filters }) => {
       )
     ) {
       try {
-        await deleteDoc(doc(db, "employees", employeeId));
+        const employee = employees.find((emp) => emp.id === employeeId);
 
         await createAuditLog({
           action: "DELETE_EMPLOYEE",
+          target: "employee",
           targetId: employeeId,
-          details: { type: "permanent" },
-          timestamp: new Date(),
+          details: {
+            type: "permanent",
+            employeeId: employee?.employeeId,
+            name: `${employee?.firstName} ${employee?.lastName}`,
+          },
         });
+
+        await deleteDoc(doc(db, "employees", employeeId));
 
         toast.success("Employee deleted permanently");
         setDropdownOpen(null);
@@ -198,12 +215,14 @@ const EmployeeList = ({ searchTerm, filters }) => {
   };
 
   const openModal = (employee, mode) => {
+    console.log("Opening modal with employee:", employee, "mode:", mode);
     setSelectedEmployee(employee);
     setModalMode(mode);
     setShowModal(true);
   };
 
   const closeModal = () => {
+    console.log("Closing modal");
     setShowModal(false);
     setSelectedEmployee(null);
     setDropdownOpen(null);
@@ -251,18 +270,14 @@ const EmployeeList = ({ searchTerm, filters }) => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Contact
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Department
-                </th>
+
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Start Date
-                </th>
+
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -301,25 +316,14 @@ const EmployeeList = ({ searchTerm, filters }) => {
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 flex items-center">
-                      <Building className="h-4 w-4 mr-1" />
-                      {employee.department}
-                    </div>
-                  </td>
+
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {getRoleName(employee.roleId)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(employee.status)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {employee.startDate
-                      ? typeof employee.startDate === "string"
-                        ? format(new Date(employee.startDate), "MMM dd, yyyy")
-                        : format(employee.startDate.toDate(), "MMM dd, yyyy")
-                      : "N/A"}
-                  </td>
+
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="relative inline-block text-left">
                       <button
@@ -336,13 +340,6 @@ const EmployeeList = ({ searchTerm, filters }) => {
                       {dropdownOpen === employee.id && (
                         <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                           <div className="py-1">
-                            <button
-                              onClick={() => openModal(employee, "view")}
-                              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              View Details
-                            </button>
                             <button
                               onClick={() => openModal(employee, "edit")}
                               className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import { 
-  Camera, 
-  Package, 
-  Users, 
-  ShoppingCart, 
-  BarChart3, 
-  Settings, 
-  Bell, 
+import { useState, useEffect } from "react";
+import {
+  Camera,
+  Package,
+  Users,
+  ShoppingCart,
+  BarChart3,
+  Settings,
+  Bell,
   Search,
   Menu,
   X,
@@ -27,11 +27,11 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  ChevronDown
-} from 'lucide-react';
-import { auth, firestore } from '../../firebase'; // Adjust path as needed
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+  ChevronDown,
+} from "lucide-react";
+import { auth, firestore } from "../../firebase"; // Adjust path as needed
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
 const Header = ({ setIsOpen }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -40,7 +40,12 @@ const Header = ({ setIsOpen }) => {
   const [notifications, setNotifications] = useState([
     { id: 1, message: "New order received", time: "2 min ago", type: "info" },
     { id: 2, message: "Low stock alert", time: "5 min ago", type: "warning" },
-    { id: 3, message: "System update complete", time: "1 hour ago", type: "success" }
+    {
+      id: 3,
+      message: "System update complete",
+      time: "1 hour ago",
+      type: "success",
+    },
   ]);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -49,32 +54,45 @@ const Header = ({ setIsOpen }) => {
       if (user) {
         try {
           // Get admin data from Firestore
-          const adminDoc = await getDoc(doc(firestore, 'admin', user.uid));
+          const adminDoc = await getDoc(doc(firestore, "admin", user.uid));
           if (adminDoc.exists()) {
             const adminData = adminDoc.data();
             setCurrentUser({
               uid: user.uid,
               email: user.email,
-              name: adminData.name || adminData.fullName || user.displayName || 'Admin User',
-              role: adminData.role || 'admin',
-              avatar: adminData.photoURL || user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(adminData.name || 'Admin')}&background=6366f1&color=fff`,
-              department: adminData.department || 'Management',
-              joinDate: adminData.createdAt || new Date()
+              name:
+                adminData.name ||
+                adminData.fullName ||
+                user.displayName ||
+                "Admin User",
+              role: adminData.role || "admin",
+              avatar:
+                adminData.photoURL ||
+                user.photoURL ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  adminData.name || "Admin"
+                )}&background=6366f1&color=fff`,
+              department: adminData.department || "Management",
+              joinDate: adminData.createdAt || new Date(),
             });
           } else {
             // Fallback if admin document doesn't exist
             setCurrentUser({
               uid: user.uid,
               email: user.email,
-              name: user.displayName || 'Admin User',
-              role: 'admin',
-              avatar: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Admin')}&background=6366f1&color=fff`,
-              department: 'Management',
-              joinDate: new Date()
+              name: user.displayName || "Admin User",
+              role: "admin",
+              avatar:
+                user.photoURL ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  user.displayName || "Admin"
+                )}&background=6366f1&color=fff`,
+              department: "Management",
+              joinDate: new Date(),
             });
           }
         } catch (error) {
-          console.error('Error fetching admin data:', error);
+          console.error("Error fetching admin data:", error);
         }
       } else {
         setCurrentUser(null);
@@ -90,7 +108,7 @@ const Header = ({ setIsOpen }) => {
       await signOut(auth);
       setShowDropdown(false);
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error("Error signing out:", error);
     }
   };
 
@@ -100,20 +118,20 @@ const Header = ({ setIsOpen }) => {
       manager: Briefcase,
       inventory: Package,
       sales: DollarSign,
-      logistics: Truck
+      logistics: Truck,
     };
     return icons[role] || User;
   };
 
   const getRoleColor = (role) => {
     const colors = {
-      admin: 'text-purple-600 bg-purple-100',
-      manager: 'text-blue-600 bg-blue-100',
-      inventory: 'text-green-600 bg-green-100',
-      sales: 'text-orange-600 bg-orange-100',
-      logistics: 'text-indigo-600 bg-indigo-100'
+      admin: "text-purple-600 bg-purple-100",
+      manager: "text-blue-600 bg-blue-100",
+      inventory: "text-green-600 bg-green-100",
+      sales: "text-orange-600 bg-orange-100",
+      logistics: "text-indigo-600 bg-indigo-100",
     };
-    return colors[role] || 'text-gray-600 bg-gray-100';
+    return colors[role] || "text-gray-600 bg-gray-100";
   };
 
   if (loading) {
@@ -139,7 +157,7 @@ const Header = ({ setIsOpen }) => {
       </header>
     );
   }
-  
+
   const RoleIcon = getRoleIcon(currentUser.role);
 
   return (
@@ -152,16 +170,12 @@ const Header = ({ setIsOpen }) => {
           >
             <Menu className="h-5 w-5 text-gray-700 group-hover:text-blue-600 transition-colors" />
           </button>
-          
-          
         </div>
-        
+
         <div className="flex items-center space-x-3">
-          
-          
           {/* User Profile */}
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowDropdown(!showDropdown)}
               className="flex items-center space-x-3 bg-gradient-to-r from-gray-50 to-blue-50 hover:from-blue-50 hover:to-indigo-50 rounded-xl px-4 py-2.5 transition-all duration-200 border border-gray-100 hover:border-blue-200 group"
             >
@@ -175,24 +189,25 @@ const Header = ({ setIsOpen }) => {
                   {currentUser.name}
                 </p>
                 <div className="flex items-center space-x-1">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(currentUser.role)}`}>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(
+                      currentUser.role
+                    )}`}
+                  >
                     <RoleIcon className="h-3 w-3 mr-1" />
                     {currentUser.role}
                   </span>
                 </div>
               </div>
-              
             </button>
-            
-            
           </div>
         </div>
       </div>
-      
+
       {/* Click outside to close dropdowns */}
       {(showDropdown || showNotifications) && (
-        <div 
-          className="fixed inset-0 z-40" 
+        <div
+          className="fixed inset-0 z-40"
           onClick={() => {
             setShowDropdown(false);
             setShowNotifications(false);

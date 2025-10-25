@@ -55,6 +55,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
+      console.log("AddEmployeeModal opened");
       fetchRoles();
       generatePassword();
       document.body.style.overflow = "hidden";
@@ -149,10 +150,13 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
       await createAuditLog({
         action: "CREATE_EMPLOYEE",
-        targetType: "employee",
+        target: "employee",
         targetId: docRef.id,
-        details: { employeeId, email: data.email },
-        timestamp: new Date(),
+        details: {
+          employeeId,
+          email: data.email,
+          roleId: data.roleId,
+        },
       });
 
       // Show password to admin before closing
@@ -185,15 +189,18 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
   };
 
   if (!isOpen) {
+    console.log("AddEmployeeModal not rendering - isOpen is false");
     return null;
   }
 
+  console.log("AddEmployeeModal rendering with isOpen:", isOpen);
+
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto"
+      className="fixed inset-0 z-[10000] overflow-y-auto"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="modal-title"
+      aria-labelledby="add-employee-modal-title"
     >
       <div
         className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
@@ -205,7 +212,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         <div className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
           <div className="flex items-center justify-between mb-6">
             <h3
-              id="modal-title"
+              id="add-employee-modal-title"
               className="text-lg font-medium text-gray-900 flex items-center"
             >
               <User className="h-5 w-5 mr-2" />

@@ -8,7 +8,6 @@ import {
   Check,
   X,
   Save,
-  Settings,
 } from "lucide-react";
 import {
   collection,
@@ -37,80 +36,105 @@ const RoleManagement = () => {
     name: "",
     description: "",
     permissions: [],
-    level: 1,
   });
 
-  // Predefined permissions that can be assigned to roles
+  // Updated permissions mapped to sidebar sections
   const availablePermissions = [
     {
-      id: "user_management",
-      name: "User Management",
-      description: "Add, edit, delete users",
+      id: "view_dashboard",
+      name: "View Dashboard",
+      description: "Access dashboard overview and statistics",
+      section: "Dashboard",
     },
     {
-      id: "role_management",
-      name: "Role Management",
-      description: "Manage roles and permissions",
+      id: "manage_products",
+      name: "Manage Products",
+      description: "Create, edit, and delete products",
+      section: "Products",
+    },
+    {
+      id: "view_products",
+      name: "View Products",
+      description: "View product listings",
+      section: "Products",
+    },
+    {
+      id: "manage_orders",
+      name: "Manage Orders",
+      description: "Process and manage customer orders",
+      section: "Orders",
+    },
+    {
+      id: "view_orders",
+      name: "View Orders",
+      description: "View order history and details",
+      section: "Orders",
+    },
+    {
+      id: "manage_inventory",
+      name: "Manage Inventory",
+      description: "Update inventory levels and manage stock",
+      section: "Inventory",
+    },
+    {
+      id: "view_inventory",
+      name: "View Inventory",
+      description: "View inventory status",
+      section: "Inventory",
+    },
+    {
+      id: "manage_employees",
+      name: "Manage Employees",
+      description: "Add, edit, and remove employees",
+      section: "Employees",
     },
     {
       id: "view_employees",
       name: "View Employees",
       description: "View employee list and details",
+      section: "Employees",
     },
     {
-      id: "edit_employees",
-      name: "Edit Employees",
-      description: "Modify employee information",
+      id: "manage_customers",
+      name: "Manage Customers",
+      description: "Manage customer accounts and information",
+      section: "Customers",
     },
     {
-      id: "delete_employees",
-      name: "Delete Employees",
-      description: "Remove employees from system",
+      id: "view_customers",
+      name: "View Customers",
+      description: "View customer list and details",
+      section: "Customers",
     },
     {
-      id: "view_reports",
-      name: "View Reports",
-      description: "Access reporting features",
+      id: "view_analytics",
+      name: "View Analytics",
+      description: "Access sales reports and analytics",
+      section: "Sales & Analytics",
     },
     {
-      id: "audit_logs",
-      name: "Audit Logs",
-      description: "View system audit logs",
+      id: "access_contact_support",
+      name: "Access Contact Support",
+      description: "Communicate with customers via contact forms",
+      section: "Contact Support",
     },
     {
-      id: "system_settings",
-      name: "System Settings",
-      description: "Configure system settings",
+      id: "manage_settings",
+      name: "Manage Settings",
+      description: "Access and modify personal settings",
+      section: "Settings",
     },
     {
-      id: "invite_users",
-      name: "Invite Users",
-      description: "Send invitation emails to new users",
+      id: "view_notifications",
+      name: "View Notifications",
+      description: "Receive and view system notifications",
+      section: "Notifications",
     },
     {
-      id: "manage_departments",
-      name: "Manage Departments",
-      description: "Create and manage departments",
-    },
-    {
-      id: "view_profile",
-      name: "View Profile",
-      description: "View own profile",
-    },
-    {
-      id: "edit_profile",
-      name: "Edit Profile",
-      description: "Edit own profile",
-    },
-    {
-      id: "view_salary",
-      name: "View Salary",
-      description: "View salary information",
-    },
-    {
-      id: "edit_salary",
-      name: "Edit Salary",
-      description: "Modify salary information",
+      id: "manage_roles",
+      name: "Manage Roles",
+      description: "Create and manage user roles and permissions",
+      section: "Settings",
     },
   ];
 
@@ -124,19 +148,10 @@ const RoleManagement = () => {
     };
   }, []);
 
-  // Debug effect to monitor showModal state
-  useEffect(() => {
-    console.log("=== Modal state changed ===", {
-      showModal,
-      editingRole: editingRole?.name || null,
-      formData: formData.name,
-    });
-  }, [showModal, editingRole, formData]);
-
   const subscribeToRoles = () => {
     try {
       const rolesRef = collection(db, "roles");
-      const q = query(rolesRef, orderBy("level", "desc"));
+      const q = query(rolesRef, orderBy("createdAt", "desc"));
 
       return onSnapshot(q, (snapshot) => {
         const rolesData = snapshot.docs.map((doc) => ({
@@ -177,20 +192,14 @@ const RoleManagement = () => {
     e.preventDefault();
     e.stopPropagation();
 
-    console.log("=== Add Role Button Clicked ===");
-    console.log("Current showModal state:", showModal);
-
     setEditingRole(null);
     setFormData({
       name: "",
       description: "",
       permissions: [],
-      level: 1,
     });
 
-    // Use setTimeout to ensure state update is processed
     setTimeout(() => {
-      console.log("Setting showModal to true...");
       setShowModal(true);
     }, 0);
   };
@@ -205,7 +214,6 @@ const RoleManagement = () => {
       name: role.name,
       description: role.description || "",
       permissions: role.permissions || [],
-      level: role.level || 1,
     });
     setShowModal(true);
   };
@@ -216,14 +224,12 @@ const RoleManagement = () => {
       e.stopPropagation();
     }
 
-    console.log("=== Closing modal ===");
     setShowModal(false);
     setEditingRole(null);
     setFormData({
       name: "",
       description: "",
       permissions: [],
-      level: 1,
     });
   };
 
@@ -343,7 +349,15 @@ const RoleManagement = () => {
     return permission?.name || permissionId;
   };
 
-  // Modal backdrop click handler
+  // Group permissions by section for better organization
+  const groupedPermissions = availablePermissions.reduce((acc, perm) => {
+    if (!acc[perm.section]) {
+      acc[perm.section] = [];
+    }
+    acc[perm.section].push(perm);
+    return acc;
+  }, {});
+
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
       handleCloseModal();
@@ -372,26 +386,14 @@ const RoleManagement = () => {
               Manage user roles and permissions ({roles.length} roles)
             </p>
           </div>
-          <div className="flex gap-2">
-            {/* Debug button */}
-            <button
-              onClick={() => {
-                console.log("Debug button clicked, showModal:", showModal);
-                alert(`Modal state: ${showModal}`);
-              }}
-              className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded"
-            >
-              Debug
-            </button>
-            <button
-              onClick={handleAddRole}
-              type="button"
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Role
-            </button>
-          </div>
+          <button
+            onClick={handleAddRole}
+            type="button"
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Role
+          </button>
         </div>
 
         {roles.length === 0 ? (
@@ -430,9 +432,6 @@ const RoleManagement = () => {
                         <h3 className="text-lg font-medium text-gray-900">
                           {role.name}
                         </h3>
-                        <p className="text-sm text-gray-500">
-                          Level {role.level}
-                        </p>
                       </div>
                     </div>
                     <div className="flex space-x-1">
@@ -508,7 +507,7 @@ const RoleManagement = () => {
         )}
       </div>
 
-      {/* Modal - Fixed Portal-style Implementation */}
+      {/* Modal */}
       {showModal && (
         <div
           className="fixed inset-0 z-[9999] overflow-y-auto"
@@ -545,48 +544,24 @@ const RoleManagement = () => {
               </div>
 
               <form onSubmit={handleSaveRole} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Role Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          name: e.target.value,
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter role name"
-                      required
-                      autoFocus
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Role Level (1-10) *
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={formData.level}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          level: parseInt(e.target.value) || 1,
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Higher levels have more authority
-                    </p>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Role Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter role name"
+                    required
+                    autoFocus
+                  />
                 </div>
 
                 <div>
@@ -611,33 +586,49 @@ const RoleManagement = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Permissions * ({formData.permissions.length} selected)
                   </label>
-                  <div className="space-y-3 max-h-64 overflow-y-auto border border-gray-200 rounded-md p-4 bg-gray-50">
-                    {availablePermissions.map((permission) => (
-                      <div key={permission.id} className="flex items-start">
-                        <div className="flex items-center h-5">
-                          <input
-                            type="checkbox"
-                            id={permission.id}
-                            checked={formData.permissions.includes(
-                              permission.id
-                            )}
-                            onChange={() => togglePermission(permission.id)}
-                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
-                          />
+                  <div className="space-y-4 max-h-96 overflow-y-auto border border-gray-200 rounded-md p-4 bg-gray-50">
+                    {Object.entries(groupedPermissions).map(
+                      ([section, perms]) => (
+                        <div key={section}>
+                          <h4 className="font-semibold text-sm text-gray-900 mb-2 sticky top-0 bg-gray-50 py-1">
+                            {section}
+                          </h4>
+                          <div className="space-y-3 ml-2">
+                            {perms.map((permission) => (
+                              <div
+                                key={permission.id}
+                                className="flex items-start"
+                              >
+                                <div className="flex items-center h-5">
+                                  <input
+                                    type="checkbox"
+                                    id={permission.id}
+                                    checked={formData.permissions.includes(
+                                      permission.id
+                                    )}
+                                    onChange={() =>
+                                      togglePermission(permission.id)
+                                    }
+                                    className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label
+                                    htmlFor={permission.id}
+                                    className="font-medium text-gray-700 cursor-pointer block"
+                                  >
+                                    {permission.name}
+                                  </label>
+                                  <p className="text-gray-500 text-xs mt-1">
+                                    {permission.description}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="ml-3 text-sm">
-                          <label
-                            htmlFor={permission.id}
-                            className="font-medium text-gray-700 cursor-pointer block"
-                          >
-                            {permission.name}
-                          </label>
-                          <p className="text-gray-500 text-xs mt-1">
-                            {permission.description}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    )}
                   </div>
                 </div>
 
