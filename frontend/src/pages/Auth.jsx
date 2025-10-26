@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import AuthToggle from "../components/Authentication/AuthToggle";
 import BackButton from "../components/Authentication/BackButton";
 import BackgroundElements from "../components/Authentication/BackgroundElements";
@@ -8,13 +8,18 @@ import ImageSection from "../components/Authentication/ImageSection";
 import AuthForm from "../components/Authentication/AuthForm";
 import GoogleSSO from "../components/Authentication/GoogleSSO";
 import NotificationBar from "../components/Authentication/NotificationBar";
-import TwoFactorModal from "../components/Authentication/TwoFactorModal"; // NEW
+import TwoFactorModal from "../components/Authentication/TwoFactorModal";
+import PasswordResetModal from "../components/Authentication/PasswordResetModal"; // NEW
 import UseAuthState from "../hooks/UseAuthState";
 import UseAuthValidation from "../hooks/UseAuthValidation";
 import UseAuthActions from "../hooks/UseAuthActions";
 
 function Auth() {
   const recaptchaRef = useRef();
+
+  // NEW: Password reset modal state
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
+  const [passwordResetReason, setPasswordResetReason] = useState("default");
 
   // Custom hooks for state management
   const {
@@ -58,7 +63,6 @@ function Auth() {
     pendingEmailData,
     handleExistingEmailConfirmation,
     checkEmailExists,
-    // NEW: 2FA related
     show2FAModal,
     setShow2FAModal,
     twoFactorCode,
@@ -68,6 +72,7 @@ function Auth() {
     handle2FASubmit,
     resend2FACode,
     resendCooldown,
+    handlePasswordReset, // NEW: from UseAuthActions
   } = UseAuthActions({
     formData,
     setFormData,
@@ -82,19 +87,18 @@ function Auth() {
     setLockoutTimeRemaining,
     setEmailVerificationSent,
     setIsLoading,
-    recaptchaRef, // Pass recaptchaRef to actions hook
+    recaptchaRef,
   });
 
   // Clear form errors when switching between login/signup modes
   useEffect(() => {
     setErrors({});
-    // Reset reCAPTCHA when switching modes
     if (recaptchaRef.current) {
       recaptchaRef.current.reset();
     }
   }, [isSignUp, setErrors]);
 
-  // Clear sensitive form data when switching modes (optional security measure)
+  // Clear sensitive form data when switching modes
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
@@ -119,6 +123,32 @@ function Auth() {
     setIsLoading(false);
   };
 
+  // NEW: Handle forgot password from "Forgot Password" link
+  const handleForgotPassword = () => {
+    setPasswordResetReason("default");
+    setShowPasswordResetModal(true);
+  };
+
+  // NEW: Handle password reset from lockout
+  const handleLockoutPasswordReset = () => {
+    setPasswordResetReason("lockout");
+    setShowPasswordResetModal(true);
+  };
+
+  // In Auth.jsx, change this:
+  // In Auth.jsx, replace the handlePasswordResetSuccess function with this:
+
+  const handlePasswordResetSuccess = async (
+    email,
+    oldPassword,
+    newPassword
+  ) => {
+    try {
+      await handlePasswordReset(email, oldPassword, newPassword);
+    } catch (error) {
+      throw error;
+    }
+  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
       <BackgroundElements />
@@ -136,7 +166,7 @@ function Auth() {
                 <AuthToggle
                   isSignUp={isSignUp}
                   toggleMode={toggleMode}
-                  isLoading={isLoading} // Disable toggle during loading
+                  isLoading={isLoading}
                 />
 
                 <FormHeader isSignUp={isSignUp} />
@@ -146,6 +176,7 @@ function Auth() {
                   lockoutTimeRemaining={lockoutTimeRemaining}
                   emailVerificationSent={emailVerificationSent}
                   isSignUp={isSignUp}
+                  onResetPassword={handleLockoutPasswordReset} // NEW: Pass handler
                 />
 
                 <GoogleSSO
@@ -177,11 +208,7 @@ function Auth() {
 
                 <FormFooter
                   isSignUp={isSignUp}
-                  onForgotPassword={() => {
-                    // Handle forgot password logic here
-                    console.log("Forgot password clicked");
-                    // You could add a modal or redirect to forgot password page
-                  }}
+                  onForgotPassword={handleForgotPassword} // NEW: Updated handler
                 />
               </div>
             </div>
@@ -189,7 +216,7 @@ function Auth() {
         </div>
       </div>
 
-      {/* NEW: Two-Factor Authentication Modal */}
+      {/* Two-Factor Authentication Modal */}
       <TwoFactorModal
         isOpen={show2FAModal}
         onClose={handle2FAClose}
@@ -200,6 +227,14 @@ function Auth() {
         error={twoFactorError}
         isLoading={isLoading}
         resendCooldown={resendCooldown}
+      />
+
+      {/* NEW: Password Reset Modal */}
+      <PasswordResetModal
+        isOpen={showPasswordResetModal}
+        onClose={() => setShowPasswordResetModal(false)}
+        onSuccess={handlePasswordResetSuccess}
+        isLoading={isLoading}
       />
     </div>
   );

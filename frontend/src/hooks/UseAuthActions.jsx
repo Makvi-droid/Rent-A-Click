@@ -8,6 +8,9 @@ import {
   signInWithPopup,
   sendEmailVerification,
   fetchSignInMethodsForEmail,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from "firebase/auth";
 
 import { auth, firestore } from "../firebase";
@@ -724,7 +727,22 @@ function UseAuthActions({
   };
 
   // Account lockout handling
+  // 🔒 IMPROVED: Account lockout with persistence
   const handleAccountLockout = () => {
+    const lockoutDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
+    const expiresAt = Date.now() + lockoutDuration;
+
+    const lockoutData = {
+      email: formData.email || "unknown",
+      attempts: loginAttempts + 1,
+      expiresAt: expiresAt,
+      lockedAt: Date.now(),
+    };
+
+    // Persist to localStorage
+    localStorage.setItem("account_lockout", JSON.stringify(lockoutData));
+    console.log("🔒 Account locked and saved to localStorage");
+
     setIsAccountLocked(true);
     setLockoutTimeRemaining(15 * 60);
 
@@ -738,6 +756,7 @@ function UseAuthActions({
         if (prev <= 1) {
           setIsAccountLocked(false);
           setLoginAttempts(0);
+          localStorage.removeItem("account_lockout");
           clearInterval(timer);
           showInfo(
             "Account lockout has been lifted. You can now try logging in again.",
@@ -1126,6 +1145,199 @@ function UseAuthActions({
     };
   }, []);
 
+  // FIXED: Customer password reset - Clear lockout FIRST, then authenticate
+
+  const handlePasswordReset = async (email, oldPassword, newPassword) => {
+    try {
+      setIsLoading(true);
+      const trimmedEmail = email.toLowerCase().trim();
+
+      console.log("🔐 Starting CUSTOMER password reset for:", trimmedEmail);
+
+      // Step 1: FORCE CLEAR ALL LOCKOUT DATA IMMEDIATELY
+      localStorage.removeItem("account_lockout");
+      console.log("✅ Lockout cleared from localStorage");
+
+      // Clear all state immediately and forcefully
+      setIsAccountLocked(false);
+      setLockoutTimeRemaining(0);
+      setLoginAttempts(0);
+      console.log("✅ All lockout state cleared");
+
+      // Wait for Firebase rate limit to reset
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Step 2: Check if this is a customer account (NOT employee)
+      let employeeCheck = null;
+      try {
+        employeeCheck = await findEmployeeByEmail(trimmedEmail);
+      } catch (error) {
+        console.warn(
+          "Employee check skipped (assuming customer):",
+          error.message
+        );
+        employeeCheck = null;
+      }
+
+      if (employeeCheck) {
+        throw new Error(
+          "This feature is only available for customer accounts."
+        );
+      }
+
+      // Step 3: Sign in with old password to authenticate
+      let userCredential;
+      try {
+        console.log("Authenticating with old password...");
+        userCredential = await signInWithEmailAndPassword(
+          auth,
+          trimmedEmail,
+          oldPassword
+        );
+        console.log("✅ Customer authenticated with old password");
+      } catch (authError) {
+        console.error("❌ Authentication failed:", authError.code);
+
+        if (
+          authError.code === "auth/wrong-password" ||
+          authError.code === "auth/invalid-credential"
+        ) {
+          throw new Error("Current password is incorrect. Please try again.");
+        } else if (authError.code === "auth/user-not-found") {
+          throw new Error("No customer account found with this email address.");
+        } else if (authError.code === "auth/too-many-requests") {
+          throw new Error(
+            "Too many recent attempts. Please wait 5 minutes and try again."
+          );
+        } else {
+          throw new Error(
+            "Authentication failed: " + (authError.message || "Unknown error")
+          );
+        }
+      }
+
+      const user = userCredential.user;
+      console.log("✅ User authenticated:", user.email);
+
+      // Step 4: Re-authenticate with credential (Firebase security requirement)
+      console.log("Re-authenticating user...");
+      const credential = EmailAuthProvider.credential(
+        trimmedEmail,
+        oldPassword
+      );
+      try {
+        await reauthenticateWithCredential(user, credential);
+        console.log("✅ Customer re-authenticated");
+      } catch (reAuthError) {
+        console.error("❌ Re-authentication failed:", reAuthError);
+        throw new Error("Re-authentication failed. Please try again.");
+      }
+
+      // Step 5: Update to new password
+      console.log("Updating password...");
+      try {
+        await updatePassword(user, newPassword);
+        console.log("✅ Password updated in Firebase Authentication");
+      } catch (updateError) {
+        console.error("❌ Password update failed:", updateError);
+
+        if (updateError.code === "auth/weak-password") {
+          throw new Error(
+            "New password is too weak. Please choose a stronger password."
+          );
+        } else if (updateError.code === "auth/requires-recent-login") {
+          throw new Error("Session expired. Please try again.");
+        } else {
+          throw new Error("Failed to update password: " + updateError.message);
+        }
+      }
+
+      // Step 6: Update customer document in Firestore
+      try {
+        const customerData = await findCustomerByFirebaseUid(user.uid);
+        if (customerData) {
+          const customerRef = doc(firestore, "customers", customerData.id);
+          await setDoc(
+            customerRef,
+            {
+              passwordLastUpdated: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+          console.log("✅ Customer document updated in Firestore");
+        }
+      } catch (firestoreError) {
+        console.warn("⚠️ Firestore update skipped:", firestoreError.message);
+        // Don't throw - password was already changed successfully
+      }
+
+      // Step 7: FINAL LOCKOUT CLEAR (in case it was re-added)
+      localStorage.removeItem("account_lockout");
+      setIsAccountLocked(false);
+      setLockoutTimeRemaining(0);
+      setLoginAttempts(0);
+      console.log("✅ Final lockout clear completed");
+
+      // Step 8: Complete login process automatically
+      const userRole = await identifyUserRole(user);
+      if (userRole && userRole.type === "customer") {
+        console.log("✅ Auto-logging in customer after password reset");
+
+        showSuccess(
+          "Password reset successful! Logging you in with your new password...",
+          4000
+        );
+
+        // Small delay to show success message
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // Complete login
+        await completeLoginProcess(user, userRole.data, userRole.type, false);
+      } else {
+        showSuccess(
+          "Password reset successful! Please log in with your new password.",
+          5000
+        );
+      }
+
+      return true;
+    } catch (error) {
+      console.error("❌ Password reset error:", error);
+
+      // Clear lockout even on error
+      localStorage.removeItem("account_lockout");
+      setIsAccountLocked(false);
+      setLockoutTimeRemaining(0);
+      setLoginAttempts(0);
+
+      showError(
+        error.message || "Failed to reset password. Please try again.",
+        6000
+      );
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const findCustomerByEmail = async (email) => {
+    try {
+      const customersRef = collection(firestore, "customers");
+      const q = query(customersRef, where("email", "==", email.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const customerDoc = querySnapshot.docs[0];
+        return { id: customerDoc.id, ...customerDoc.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error("Error finding customer:", error);
+      return null;
+    }
+  };
+
   return {
     handleInputChange,
     handleRecaptchaChange,
@@ -1146,6 +1358,7 @@ function UseAuthActions({
     handle2FASubmit,
     resend2FACode,
     resendCooldown,
+    handlePasswordReset,
   };
 }
 

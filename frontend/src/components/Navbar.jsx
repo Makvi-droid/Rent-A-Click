@@ -111,7 +111,6 @@ function Navbar() {
               className="flex items-center space-x-3 group cursor-pointer"
               onMouseEnter={() => setIsHovering(true)}
               onMouseLeave={() => setIsHovering(false)}
-              onClick={() => handleNavigation("/")}
             >
               <div className="relative">
                 {/* Logo placeholder - replace with your actual logo */}
