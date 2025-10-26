@@ -20,6 +20,7 @@ import {
   PieChart as PieChartIcon,
   FileText,
   Filter,
+  AlertTriangle,
 } from "lucide-react";
 import {
   LineChart,
@@ -39,7 +40,7 @@ import {
   AreaChart,
 } from "recharts";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import {
   format,
   subDays,
@@ -397,6 +398,11 @@ const Analytics = () => {
     };
   }, [dateRange, customStartDate, customEndDate]);
 
+  // Simple currency formatter for PDF (no special characters)
+  const formatCurrencyForPDF = (amount) => {
+    return `PHP ${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+  };
+
   // Generate PDF Report
   const generatePDFReport = () => {
     const doc = new jsPDF();
@@ -425,13 +431,13 @@ const Analytics = () => {
     doc.text("Executive Summary", 14, yPos);
     yPos += 10;
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: yPos,
       head: [["Metric", "Value", "Growth"]],
       body: [
         [
           "Total Revenue",
-          formatCurrency(analyticsData.totalRevenue),
+          formatCurrencyForPDF(analyticsData.totalRevenue),
           `${
             analyticsData.revenueGrowth > 0 ? "+" : ""
           }${analyticsData.revenueGrowth.toFixed(1)}%`,
@@ -439,7 +445,7 @@ const Analytics = () => {
         ["Total Orders", analyticsData.totalOrders.toString(), "-"],
         [
           "Average Order Value",
-          formatCurrency(analyticsData.averageOrderValue),
+          formatCurrencyForPDF(analyticsData.averageOrderValue),
           "-",
         ],
         ["Total Customers", analyticsData.totalCustomers.toString(), "-"],
@@ -462,13 +468,13 @@ const Analytics = () => {
     doc.text("Top 10 Products", 14, yPos);
     yPos += 10;
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: yPos,
       head: [["Product", "Quantity Sold", "Revenue"]],
       body: analyticsData.topProducts.map((p) => [
         p.name,
         p.quantity.toString(),
-        formatCurrency(p.revenue),
+        formatCurrencyForPDF(p.revenue),
       ]),
       theme: "striped",
       headStyles: { fillColor: [59, 130, 246] },
@@ -480,12 +486,12 @@ const Analytics = () => {
     doc.text("Top 10 Customers", 14, yPos);
     yPos += 10;
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: yPos,
       head: [["Customer Email", "Total Spent"]],
       body: analyticsData.topCustomers.map((c) => [
         c.email,
-        formatCurrency(c.totalSpent),
+        formatCurrencyForPDF(c.totalSpent),
       ]),
       theme: "striped",
       headStyles: { fillColor: [59, 130, 246] },
@@ -498,7 +504,7 @@ const Analytics = () => {
     doc.text("Order Status Distribution", 14, yPos);
     yPos += 10;
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: yPos,
       head: [["Status", "Count", "Percentage"]],
       body: analyticsData.ordersByStatus.map((s) => [
@@ -519,7 +525,7 @@ const Analytics = () => {
       doc.setTextColor(0, 0, 0); // Reset to black
       yPos += 10;
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: yPos,
         head: [["Product", "Stock Remaining"]],
         body: analyticsData.lowStockProducts.map((p) => [
@@ -825,20 +831,7 @@ const Analytics = () => {
                   </ResponsiveContainer>
                 </div>
 
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Payment Methods
-                  </h3>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={analyticsData.paymentMethods}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="method" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#8B5CF6" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <div></div>
               </div>
             </div>
           )}
@@ -1138,35 +1131,7 @@ const Analytics = () => {
 
               {/* Payment Methods */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Payment Methods Distribution
-                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={analyticsData.paymentMethods}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ method, percentage }) =>
-                          `${method} (${percentage}%)`
-                        }
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="count"
-                      >
-                        {analyticsData.paymentMethods.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-
                   <div className="flex items-center justify-center">
                     <div className="space-y-3 w-full">
                       {analyticsData.paymentMethods.map((method, index) => (

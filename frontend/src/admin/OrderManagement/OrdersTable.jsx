@@ -1090,52 +1090,6 @@ const OrdersTable = ({
 
                             {/* Right Column */}
                             <div className="space-y-4">
-                              {/* ID Verification */}
-                              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600">
-                                <h4 className="text-white font-semibold text-sm mb-3 flex items-center">
-                                  <Shield className="w-4 h-4 mr-2 text-purple-400" />
-                                  ID Verification
-                                </h4>
-                                {order.idSubmitted ? (
-                                  <div className="space-y-2">
-                                    <div className="flex items-center space-x-2 text-green-400 text-sm">
-                                      <CheckCircle2 className="w-4 h-4" />
-                                      <span>ID Submitted</span>
-                                    </div>
-                                    <div className="p-2 bg-gray-700/30 rounded border border-gray-600">
-                                      <div className="flex items-center justify-between mb-1">
-                                        <span className="text-white text-xs">
-                                          Physical ID:
-                                        </span>
-                                        <span
-                                          className={`text-xs px-2 py-0.5 rounded ${
-                                            order.physicalIdShown
-                                              ? "bg-green-500/20 text-green-400"
-                                              : "bg-yellow-500/20 text-yellow-400"
-                                          }`}
-                                        >
-                                          {order.physicalIdShown
-                                            ? "Shown"
-                                            : "Not Shown"}
-                                        </span>
-                                      </div>
-                                      {order.physicalIdShownAt && (
-                                        <p className="text-gray-400 text-xs">
-                                          {safeFormatDate(
-                                            order.physicalIdShownAt
-                                          )}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center space-x-2 text-red-400 text-sm">
-                                    <AlertTriangle className="w-4 h-4" />
-                                    <span>Not Submitted</span>
-                                  </div>
-                                )}
-                              </div>
-
                               {/* Payment Info */}
                               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600">
                                 <h4 className="text-white font-semibold text-sm mb-3 flex items-center">
