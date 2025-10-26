@@ -26,7 +26,7 @@ import {
 import { auth, db } from "../../firebase";
 import { toast } from "react-hot-toast";
 import { createAuditLog } from "../../utils/auditLogger";
-import bcrypt from "bcryptjs";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 
 const schema = yup.object({
   email: yup.string().email("Invalid email").required("Email is required"),
@@ -124,34 +124,40 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const hashPassword = async (password) => {
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    return hashedPassword;
-  };
-
   const onSubmit = async (data) => {
     setLoading(true);
     try {
-      const employeeId = await generateEmployeeId();
-      const hashedPassword = await hashPassword(temporaryPassword);
+      // STEP 1: Create Firebase Auth account FIRST
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        data.email.toLowerCase().trim(),
+        temporaryPassword
+      );
+      const firebaseUser = userCredential.user;
 
+      // STEP 2: Generate employee ID
+      const employeeId = await generateEmployeeId();
+
+      // STEP 3: Create employee document - USE FIREBASE UID AS DOCUMENT ID
       const employeeData = {
         ...data,
+        email: data.email.toLowerCase().trim(),
         employeeId,
-        hashedPassword,
+        firebaseUid: firebaseUser.uid,
         passwordChangeRequired: true,
         createdAt: new Date(),
         updatedAt: new Date(),
         status: "active",
       };
 
-      const docRef = await addDoc(collection(db, "employees"), employeeData);
+      const employeeRef = doc(db, "employees", firebaseUser.uid);
+      await setDoc(employeeRef, employeeData);
 
+      // ✅ STEP 4: Create audit log
       await createAuditLog({
         action: "CREATE_EMPLOYEE",
         target: "employee",
-        targetId: docRef.id,
+        targetId: firebaseUser.uid,
         details: {
           employeeId,
           email: data.email,
@@ -159,24 +165,41 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         },
       });
 
-      // Show password to admin before closing
+      // ✅ STEP 5: Show success message
       toast.success(
         `Employee added! Temporary password: ${temporaryPassword}`,
         { duration: 10000 }
       );
 
-      console.log("Employee Created:");
-      console.log("Email:", data.email);
+      console.log("=== EMPLOYEE CREATION SUCCESS ===");
+      console.log("Firebase UID:", firebaseUser.uid);
       console.log("Employee ID:", employeeId);
+      console.log("Email:", data.email);
       console.log("Temporary Password:", temporaryPassword);
-      console.log("(Password is hashed in database)");
+      console.log("================================");
 
       reset();
       setTemporaryPassword("");
       onClose();
     } catch (error) {
-      console.error("Error adding employee:", error);
-      toast.error("Failed to add employee");
+      console.error("❌ Error adding employee:", error);
+
+      // Handle specific Firebase Auth errors
+      let errorMessage = "Failed to add employee";
+
+      if (error.code === "auth/email-already-in-use") {
+        errorMessage =
+          "This email is already registered. Each employee needs a unique email.";
+      } else if (error.code === "auth/invalid-email") {
+        errorMessage = "Invalid email format.";
+      } else if (error.code === "auth/weak-password") {
+        errorMessage = "Generated password is too weak. Please regenerate.";
+      } else if (error.code === "permission-denied") {
+        errorMessage =
+          "Permission denied. Check Firestore security rules for employees collection.";
+      }
+
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -318,9 +341,8 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
                 </button>
               </div>
               <p className="text-xs text-blue-700 mt-2">
-                ⚠️ Save this password! It will be hashed in the database and
-                shown only once. The employee will need this to login and will
-                be required to change it on first login.
+                ⚠️ Save this password! The employee will use this to login and
+                will be required to change it on first login.
               </p>
             </div>
 

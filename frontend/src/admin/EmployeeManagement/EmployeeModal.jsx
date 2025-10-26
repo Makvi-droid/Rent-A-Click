@@ -6,8 +6,6 @@ import {
   Phone,
   Shield,
   Save,
-  Calendar,
-  Building,
   FileText,
   AlertCircle,
 } from "lucide-react";
@@ -20,14 +18,13 @@ import { toast } from "react-hot-toast";
 import { createAuditLog } from "../../utils/auditLogger";
 import { format } from "date-fns";
 
+// Fixed schema - removed department and startDate
 const schema = yup.object({
   firstName: yup.string().required("First name is required"),
   lastName: yup.string().required("Last name is required"),
   email: yup.string().email("Invalid email").required("Email is required"),
   phone: yup.string(),
-  department: yup.string().required("Department is required"),
   roleId: yup.string().required("Role is required"),
-  startDate: yup.string().required("Start date is required"),
   status: yup.string().required("Status is required"),
   notes: yup.string(),
 });
@@ -51,7 +48,6 @@ const EmployeeModal = ({ employee, mode, isOpen, onClose, onUpdate }) => {
     if (isOpen && employee) {
       console.log("EmployeeModal opened with employee:", employee);
       fetchRoles();
-      populateForm();
       setCurrentMode(mode);
       document.body.style.overflow = "hidden";
     } else {
@@ -63,6 +59,13 @@ const EmployeeModal = ({ employee, mode, isOpen, onClose, onUpdate }) => {
     };
   }, [isOpen, employee, mode]);
 
+  // Separate effect to populate form after roles are loaded
+  useEffect(() => {
+    if (isOpen && employee && roles.length > 0) {
+      populateForm();
+    }
+  }, [isOpen, employee, roles]);
+
   const fetchRoles = async () => {
     try {
       const rolesSnapshot = await getDocs(collection(db, "roles"));
@@ -70,38 +73,27 @@ const EmployeeModal = ({ employee, mode, isOpen, onClose, onUpdate }) => {
         id: doc.id,
         ...doc.data(),
       }));
+      console.log("Roles fetched:", rolesData);
       setRoles(rolesData);
     } catch (error) {
       console.error("Error fetching roles:", error);
+      toast.error("Failed to load roles");
     }
   };
 
   const populateForm = () => {
     if (!employee) return;
 
+    console.log("Populating form with:", employee);
     setValue("firstName", employee.firstName || "");
     setValue("lastName", employee.lastName || "");
     setValue("email", employee.email || "");
     setValue("phone", employee.phone || "");
-    setValue("department", employee.department || "");
     setValue("roleId", employee.roleId || "");
     setValue("status", employee.status || "active");
     setValue("notes", employee.notes || "");
 
-    // Handle start date
-    if (employee.startDate) {
-      try {
-        let dateStr;
-        if (typeof employee.startDate === "string") {
-          dateStr = employee.startDate.split("T")[0];
-        } else if (employee.startDate.toDate) {
-          dateStr = format(employee.startDate.toDate(), "yyyy-MM-dd");
-        }
-        setValue("startDate", dateStr);
-      } catch (error) {
-        console.error("Error formatting date:", error);
-      }
-    }
+    console.log("Form populated with roleId:", employee.roleId);
   };
 
   const onSubmit = async (data) => {
@@ -113,6 +105,8 @@ const EmployeeModal = ({ employee, mode, isOpen, onClose, onUpdate }) => {
         ...data,
         updatedAt: new Date(),
       };
+
+      console.log("Updating employee with data:", updateData);
 
       await updateDoc(doc(db, "employees", employee.id), updateData);
 
@@ -330,7 +324,7 @@ const EmployeeModal = ({ employee, mode, isOpen, onClose, onUpdate }) => {
               </div>
             </div>
 
-            {/* Department and Role */}
+            {/* Role and Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

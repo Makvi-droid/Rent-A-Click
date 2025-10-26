@@ -1,4 +1,4 @@
-// hooks/UseAuthActions.js - Fixed authentication for Admin/Employee/Customer
+// hooks/UseAuthActions.js - FIXED Employee Authentication
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -23,7 +23,6 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
-import bcrypt from "bcryptjs";
 
 function UseAuthActions({
   formData,
@@ -226,22 +225,6 @@ function UseAuthActions({
     } catch (error) {
       console.error("Error finding employee:", error);
       return null;
-    }
-  };
-
-  // Verify employee password using bcrypt
-  const verifyEmployeePassword = async (plainPassword, hashedPassword) => {
-    try {
-      console.log("Verifying employee password...");
-      console.log("Plain password length:", plainPassword?.length);
-      console.log("Hashed password exists:", !!hashedPassword);
-
-      const isMatch = await bcrypt.compare(plainPassword, hashedPassword);
-      console.log("Password verification result:", isMatch);
-      return isMatch;
-    } catch (error) {
-      console.error("Error verifying employee password:", error);
-      return false;
     }
   };
 
@@ -803,7 +786,7 @@ function UseAuthActions({
     }
   };
 
-  // Main form submission with employee authentication
+  // Main form submission - FIXED FOR EMPLOYEES
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -906,15 +889,11 @@ function UseAuthActions({
           }
         }
       } else {
-        // *** SIGN IN PROCESS - For all user types ***
+        // *** SIGN IN PROCESS - FIXED FOR EMPLOYEES ***
         console.log("=== SIGN IN PROCESS STARTED ===");
         console.log("Email:", formData.email.toLowerCase().trim());
 
-        const emailCheck = await checkEmailExists(
-          formData.email.toLowerCase().trim()
-        );
-
-        // Check if it's an employee trying to login
+        // Check if it's an employee
         const employeeData = await findEmployeeByEmail(
           formData.email.toLowerCase().trim()
         );
@@ -922,12 +901,9 @@ function UseAuthActions({
         if (employeeData) {
           console.log("=== EMPLOYEE LOGIN DETECTED ===");
           console.log("Employee ID:", employeeData.employeeId);
-          console.log("Employee Email:", employeeData.email);
           console.log("Employee Status:", employeeData.status);
-          console.log("Has Firebase UID:", !!employeeData.firebaseUid);
-          console.log("Has Hashed Password:", !!employeeData.hashedPassword);
 
-          // Check employee status first
+          // Check employee status
           if (employeeData.status !== "active") {
             showError(
               "Employee account is not active. Please contact administrator.",
@@ -937,17 +913,44 @@ function UseAuthActions({
             return;
           }
 
-          // Verify employee password using bcrypt
-          console.log("Verifying password with bcrypt...");
-          const passwordMatch = await verifyEmployeePassword(
-            formData.password,
-            employeeData.hashedPassword
-          );
+          // ✅ FIXED: For employees, ALWAYS use Firebase Authentication directly
+          // This ensures password changes work correctly
+          try {
+            console.log("Attempting Firebase sign in for employee...");
 
-          console.log("Password match result:", passwordMatch);
+            const userCredential = await signInWithEmailAndPassword(
+              auth,
+              formData.email.toLowerCase().trim(),
+              formData.password
+            );
+            const user = userCredential.user;
 
-          if (!passwordMatch) {
-            console.log("❌ Password verification failed");
+            console.log("✅ Employee Firebase sign in successful!");
+
+            // Update firebaseUid if not set
+            if (
+              !employeeData.firebaseUid ||
+              employeeData.firebaseUid !== user.uid
+            ) {
+              const employeeRef = doc(firestore, "employees", employeeData.id);
+              await setDoc(
+                employeeRef,
+                {
+                  firebaseUid: user.uid,
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              );
+              console.log("✅ Firebase UID synced to employee document");
+            }
+
+            const userRole = await identifyUserRole(user);
+            setLoginAttempts(0);
+            await handlePostAuthentication(user, userRole, false, "email");
+            return;
+          } catch (authError) {
+            console.error("❌ Employee Firebase auth error:", authError);
+
             const newAttempts = loginAttempts + 1;
             setLoginAttempts(newAttempts);
 
@@ -955,189 +958,41 @@ function UseAuthActions({
               handleAccountLockout();
             } else {
               const remainingAttempts = 5 - newAttempts;
-              const errorMsg = `Incorrect password. ${remainingAttempts} attempt${
-                remainingAttempts !== 1 ? "s" : ""
-              } remaining.`;
+              let errorMsg = "";
+
+              if (
+                authError.code === "auth/wrong-password" ||
+                authError.code === "auth/invalid-credential"
+              ) {
+                errorMsg = `Incorrect password. ${remainingAttempts} attempt${
+                  remainingAttempts !== 1 ? "s" : ""
+                } remaining.`;
+              } else if (authError.code === "auth/user-not-found") {
+                errorMsg =
+                  "Employee account not found in Firebase. Please contact administrator.";
+              } else if (authError.code === "auth/too-many-requests") {
+                errorMsg =
+                  "Too many failed attempts. Please wait before trying again.";
+              } else {
+                errorMsg = `Authentication failed. ${remainingAttempts} attempt${
+                  remainingAttempts !== 1 ? "s" : ""
+                } remaining.`;
+              }
+
               setErrors({ submit: errorMsg });
               showError(errorMsg, 5000);
             }
             setIsLoading(false);
             return;
           }
-
-          // ✅ Password is correct! Now handle Firebase authentication
-          console.log("✅ Password verified successfully!");
-
-          // Check if employee has Firebase account linked
-          if (employeeData.firebaseUid) {
-            console.log(
-              "Employee has existing Firebase account, attempting sign in..."
-            );
-
-            // Try to sign in with Firebase using the SAME password
-            try {
-              const userCredential = await signInWithEmailAndPassword(
-                auth,
-                formData.email.toLowerCase().trim(),
-                formData.password
-              );
-              const user = userCredential.user;
-
-              console.log("✅ Firebase sign in successful");
-
-              const userRole = await identifyUserRole(user);
-              setLoginAttempts(0);
-              await handlePostAuthentication(user, userRole, false, "email");
-              return;
-            } catch (authError) {
-              console.error("❌ Firebase auth error:", authError);
-
-              // Firebase password doesn't match - this shouldn't happen
-              if (
-                authError.code === "auth/wrong-password" ||
-                authError.code === "auth/invalid-credential"
-              ) {
-                console.log("⚠️ Firebase password mismatch detected");
-                showError(
-                  "Authentication error. Please contact administrator to reset your password.",
-                  6000
-                );
-              } else if (authError.code === "auth/user-not-found") {
-                console.log(
-                  "⚠️ Firebase user not found - employee firebaseUid may be incorrect"
-                );
-                showError(
-                  "Account configuration error. Please contact administrator.",
-                  6000
-                );
-              } else {
-                showError("Authentication failed. Please try again.", 5000);
-              }
-              setIsLoading(false);
-              return;
-            }
-          } else {
-            // Employee doesn't have Firebase account yet - create one with the SAME password
-            console.log("Creating new Firebase account for employee...");
-
-            try {
-              const userCredential = await createUserWithEmailAndPassword(
-                auth,
-                formData.email.toLowerCase().trim(),
-                formData.password
-              );
-              const user = userCredential.user;
-
-              console.log("✅ Firebase account created:", user.uid);
-
-              // Link Firebase UID to employee document
-              const employeeRef = doc(firestore, "employees", employeeData.id);
-              await setDoc(
-                employeeRef,
-                {
-                  firebaseUid: user.uid,
-                  updatedAt: serverTimestamp(),
-                  lastLoginAt: serverTimestamp(),
-                },
-                { merge: true }
-              );
-
-              console.log("✅ Firebase UID linked to employee document");
-
-              const userRole = await identifyUserRole(user);
-              setLoginAttempts(0);
-              await handlePostAuthentication(user, userRole, true, "email");
-              return;
-            } catch (createError) {
-              console.error("❌ Error creating Firebase account:", createError);
-
-              if (createError.code === "auth/email-already-in-use") {
-                // Firebase account exists but wasn't linked - try to sign in and link
-                console.log(
-                  "⚠️ Firebase account exists - attempting to sign in and link"
-                );
-
-                try {
-                  const userCredential = await signInWithEmailAndPassword(
-                    auth,
-                    formData.email.toLowerCase().trim(),
-                    formData.password
-                  );
-                  const user = userCredential.user;
-
-                  console.log(
-                    "✅ Signed in with existing Firebase account:",
-                    user.uid
-                  );
-
-                  // Link the Firebase UID to employee
-                  const employeeRef = doc(
-                    firestore,
-                    "employees",
-                    employeeData.id
-                  );
-                  await setDoc(
-                    employeeRef,
-                    {
-                      firebaseUid: user.uid,
-                      updatedAt: serverTimestamp(),
-                      lastLoginAt: serverTimestamp(),
-                    },
-                    { merge: true }
-                  );
-
-                  console.log(
-                    "✅ Existing Firebase account linked to employee"
-                  );
-
-                  const userRole = await identifyUserRole(user);
-                  setLoginAttempts(0);
-                  await handlePostAuthentication(
-                    user,
-                    userRole,
-                    false,
-                    "email"
-                  );
-                  return;
-                } catch (signInError) {
-                  console.error(
-                    "❌ Error signing in with existing account:",
-                    signInError
-                  );
-
-                  if (signInError.code === "auth/wrong-password") {
-                    showError(
-                      "A Firebase account exists with this email but with a different password. Please contact administrator to resolve this issue.",
-                      8000
-                    );
-                  } else {
-                    showError(
-                      "Authentication failed. Please contact administrator.",
-                      5000
-                    );
-                  }
-                  setIsLoading(false);
-                  return;
-                }
-              } else if (createError.code === "auth/weak-password") {
-                showError(
-                  "Password is too weak. Please contact administrator to reset your password with a stronger one.",
-                  6000
-                );
-              } else {
-                showError(
-                  "Failed to create account. Please contact administrator.",
-                  5000
-                );
-              }
-              setIsLoading(false);
-              return;
-            }
-          }
         }
 
-        // Not an employee - proceed with regular Firebase auth for customers
+        // Not an employee - proceed with regular customer login
         console.log("Not an employee - proceeding with regular customer login");
+
+        const emailCheck = await checkEmailExists(
+          formData.email.toLowerCase().trim()
+        );
 
         if (
           emailCheck.exists &&

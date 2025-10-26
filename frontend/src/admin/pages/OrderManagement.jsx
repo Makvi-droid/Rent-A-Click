@@ -1,4 +1,4 @@
-// OrderManagement.jsx - COMPLETE FIXED VERSION WITH WORKING PENALTY
+// OrderManagement.jsx - FIXED VERSION WITH EMPLOYEE ACCESS
 import React, { useState, useEffect } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../../firebase";
@@ -12,8 +12,6 @@ import {
   deleteDoc,
   getDoc,
   where,
-  limit,
-  startAfter,
   getDocs,
 } from "firebase/firestore";
 
@@ -29,7 +27,10 @@ import OrdersErrorState from "../OrderManagement/OrdersErrorState";
 const OrderManagement = () => {
   const [user, authLoading] = useAuthState(auth);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminCheckLoading, setAdminCheckLoading] = useState(true);
+  const [isEmployee, setIsEmployee] = useState(false);
+  const [employeeData, setEmployeeData] = useState(null);
+  const [userPermissions, setUserPermissions] = useState([]);
+  const [authCheckLoading, setAuthCheckLoading] = useState(true);
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,35 +132,96 @@ const OrderManagement = () => {
     }
   };
 
-  // Check if user is admin
+  // Check if user is admin or employee with permissions
   useEffect(() => {
-    const checkAdminStatus = async () => {
+    const checkUserAccess = async () => {
       if (!user) {
         setIsAdmin(false);
-        setAdminCheckLoading(false);
+        setIsEmployee(false);
+        setAuthCheckLoading(false);
         return;
       }
 
       try {
+        console.log("Checking access for user:", user.uid, user.email);
+
+        // Check if user is admin
         const adminDocRef = doc(db, "admin", user.uid);
         const adminDoc = await getDoc(adminDocRef);
 
         if (adminDoc.exists()) {
+          console.log("User is admin");
           setIsAdmin(true);
+          setIsEmployee(false);
+          setUserPermissions(["all"]); // Admin has all permissions
+          setAuthCheckLoading(false);
+          return;
+        }
+
+        // Check if user is employee
+        // First try by firebaseUid
+        let employeeDoc = await getDoc(doc(db, "employees", user.uid));
+
+        // If not found by UID, try by email
+        if (!employeeDoc.exists()) {
+          console.log("Checking employee by email:", user.email);
+          const employeesQuery = query(
+            collection(db, "employees"),
+            where("email", "==", user.email)
+          );
+          const employeeSnapshot = await getDocs(employeesQuery);
+
+          if (!employeeSnapshot.empty) {
+            employeeDoc = employeeSnapshot.docs[0];
+            console.log("Found employee by email");
+          }
+        }
+
+        if (employeeDoc.exists()) {
+          const empData = employeeDoc.data();
+          console.log("Employee found:", empData);
+          setEmployeeData({ id: employeeDoc.id, ...empData });
+          setIsEmployee(true);
+
+          // Get employee's role permissions
+          if (empData.roleId) {
+            const roleDoc = await getDoc(doc(db, "roles", empData.roleId));
+            if (roleDoc.exists()) {
+              const roleData = roleDoc.data();
+              console.log("Employee role permissions:", roleData.permissions);
+              setUserPermissions(roleData.permissions || []);
+            } else {
+              console.log("Role not found for roleId:", empData.roleId);
+              setUserPermissions([]);
+            }
+          } else {
+            console.log("Employee has no roleId");
+            setUserPermissions([]);
+          }
         } else {
+          console.log("User is neither admin nor employee");
           setIsAdmin(false);
+          setIsEmployee(false);
+          setUserPermissions([]);
         }
       } catch (error) {
-        console.error("Error checking admin status:", error);
+        console.error("Error checking user access:", error);
         setIsAdmin(false);
-        setError("Failed to verify admin privileges");
+        setIsEmployee(false);
+        setError("Failed to verify access privileges");
       } finally {
-        setAdminCheckLoading(false);
+        setAuthCheckLoading(false);
       }
     };
 
-    checkAdminStatus();
+    checkUserAccess();
   }, [user]);
+
+  // Check if user has specific permission
+  const hasPermission = (permission) => {
+    if (isAdmin) return true;
+    return userPermissions.includes(permission);
+  };
 
   // Currency formatter
   const formatCurrency = (amount) => {
@@ -179,7 +241,7 @@ const OrderManagement = () => {
     }
   };
 
-  // FIXED: Check if return is overdue
+  // Check if return is overdue
   const isReturnOverdue = (order) => {
     if (order.itemReturned) return false;
 
@@ -187,7 +249,6 @@ const OrderManagement = () => {
       const endDate = order.rentalDetails?.endDate;
       if (!endDate) return false;
 
-      // Handle both string dates and Firebase timestamps
       let returnDate;
       if (typeof endDate === "string") {
         returnDate = new Date(endDate);
@@ -201,7 +262,6 @@ const OrderManagement = () => {
         returnDate = new Date(endDate);
       }
 
-      // Check if date is valid
       if (isNaN(returnDate.getTime())) {
         console.warn("Invalid return date for order:", order.id, endDate);
         return false;
@@ -210,7 +270,6 @@ const OrderManagement = () => {
       const now = new Date();
       const isOverdue = now > returnDate;
 
-      // Debug log
       if (isOverdue && !order.itemReturned) {
         console.log("Overdue order found:", {
           orderId: order.id,
@@ -231,7 +290,7 @@ const OrderManagement = () => {
     }
   };
 
-  // FIXED: Calculate penalty for overdue items
+  // Calculate penalty for overdue items
   const calculatePenalty = (order) => {
     const penalty =
       isReturnOverdue(order) && !order.itemReturned ? LATE_RETURN_PENALTY : 0;
@@ -240,7 +299,25 @@ const OrderManagement = () => {
 
   // Fetch orders from Firebase
   useEffect(() => {
-    if (!user || !isAdmin || adminCheckLoading) return;
+    // Allow access if user is admin OR employee with view_orders permission
+    const canViewOrders =
+      isAdmin || hasPermission("view_orders") || hasPermission("manage_orders");
+
+    if (!user || authCheckLoading || (!canViewOrders && !isEmployee)) {
+      console.log("Cannot view orders:", {
+        user: !!user,
+        authCheckLoading,
+        canViewOrders,
+        isEmployee,
+      });
+      return;
+    }
+
+    console.log("Fetching orders for user:", {
+      isAdmin,
+      isEmployee,
+      permissions: userPermissions,
+    });
 
     const ordersRef = collection(db, "checkouts");
     const ordersQuery = query(ordersRef, orderBy("createdAt", "desc"));
@@ -249,6 +326,11 @@ const OrderManagement = () => {
       ordersQuery,
       (snapshot) => {
         try {
+          console.log(
+            "Orders snapshot received:",
+            snapshot.docs.length,
+            "orders"
+          );
           const ordersData = snapshot.docs.map((doc) => {
             const data = doc.data();
 
@@ -267,7 +349,7 @@ const OrderManagement = () => {
               formattedReturnedAt: data.returnedAt
                 ? formatDate(data.returnedAt)
                 : null,
-              // Handle rental dates - keep original endDate for penalty calculation
+              // Handle rental dates
               rentalDetails: data.rentalDetails
                 ? {
                     ...data.rentalDetails,
@@ -277,7 +359,6 @@ const OrderManagement = () => {
                     returnDate: convertFirebaseTimestamp(
                       data.rentalDetails?.returnDate
                     ),
-                    // Keep endDate as-is for penalty calculation
                     endDate: data.rentalDetails?.endDate,
                     formattedRentalDate: formatDate(
                       data.rentalDetails?.rentalDate,
@@ -299,7 +380,6 @@ const OrderManagement = () => {
                 : null,
             };
 
-            // Calculate computed properties
             const isOverdue = !data.itemReturned && isReturnOverdue(orderData);
             const penalty = calculatePenalty(orderData);
 
@@ -327,14 +407,14 @@ const OrderManagement = () => {
       (err) => {
         console.error("Error fetching orders:", err);
         setError(
-          "Failed to connect to database. Please check your admin privileges."
+          "Failed to connect to database. Please check your access privileges."
         );
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [user, isAdmin, adminCheckLoading]);
+  }, [user, isAdmin, isEmployee, authCheckLoading, userPermissions]);
 
   // Calculate statistics
   const calculateStats = (ordersData) => {
@@ -381,11 +461,6 @@ const OrderManagement = () => {
       ).length,
       totalPenalties,
     };
-
-    console.log("Stats calculated:", {
-      overdueItems: newStats.overdueItems,
-      totalPenalties: newStats.totalPenalties,
-    });
 
     setStats(newStats);
   };
@@ -557,7 +632,7 @@ const OrderManagement = () => {
 
   // Update order status
   const updateOrderStatus = async (orderId, newStatus) => {
-    if (!isAdmin) {
+    if (!hasPermission("manage_orders")) {
       alert("You do not have permission to update orders");
       return;
     }
@@ -571,7 +646,7 @@ const OrderManagement = () => {
     } catch (error) {
       console.error("Error updating order status:", error);
       if (error.code === "permission-denied") {
-        alert("Permission denied. Please check your admin privileges.");
+        alert("Permission denied. Please check your access privileges.");
       } else {
         alert("Failed to update order status: " + error.message);
       }
@@ -580,7 +655,7 @@ const OrderManagement = () => {
 
   // Update payment status
   const updatePaymentStatus = async (orderId, newPaymentStatus) => {
-    if (!isAdmin) {
+    if (!hasPermission("manage_orders")) {
       alert("You do not have permission to update payment status");
       return;
     }
@@ -594,7 +669,7 @@ const OrderManagement = () => {
     } catch (error) {
       console.error("Error updating payment status:", error);
       if (error.code === "permission-denied") {
-        alert("Permission denied. Please check your admin privileges.");
+        alert("Permission denied. Please check your access privileges.");
       } else {
         alert("Failed to update payment status: " + error.message);
       }
@@ -603,7 +678,7 @@ const OrderManagement = () => {
 
   // Update return status
   const updateReturnStatus = async (orderId, isReturned, returnedAt = null) => {
-    if (!isAdmin) {
+    if (!hasPermission("manage_orders")) {
       alert("You do not have permission to update return status");
       return;
     }
@@ -625,7 +700,7 @@ const OrderManagement = () => {
     } catch (error) {
       console.error("Error updating return status:", error);
       if (error.code === "permission-denied") {
-        alert("Permission denied. Please check your admin privileges.");
+        alert("Permission denied. Please check your access privileges.");
       } else {
         alert("Failed to update return status: " + error.message);
       }
@@ -634,7 +709,7 @@ const OrderManagement = () => {
 
   // Update physical ID verification status
   const updatePhysicalIdStatus = async (orderId, physicalIdShown) => {
-    if (!isAdmin) {
+    if (!hasPermission("manage_orders")) {
       alert("You do not have permission to update ID status");
       return;
     }
@@ -664,7 +739,7 @@ const OrderManagement = () => {
     } catch (error) {
       console.error("Error updating physical ID status:", error);
       if (error.code === "permission-denied") {
-        alert("Permission denied. Please check your admin privileges.");
+        alert("Permission denied. Please check your access privileges.");
       } else {
         alert("Failed to update physical ID status: " + error.message);
       }
@@ -673,7 +748,7 @@ const OrderManagement = () => {
 
   // Delete order
   const deleteOrder = async (orderId) => {
-    if (!isAdmin) {
+    if (!hasPermission("manage_orders")) {
       alert("You do not have permission to delete orders");
       return;
     }
@@ -694,7 +769,7 @@ const OrderManagement = () => {
 
       if (error.code === "permission-denied") {
         alert(
-          "Permission denied. You may not have admin privileges or the Firestore security rules need to be updated."
+          "Permission denied. You may not have the required privileges or the Firestore security rules need to be updated."
         );
       } else if (error.code === "not-found") {
         alert("Order not found. It may have already been deleted.");
@@ -728,7 +803,7 @@ const OrderManagement = () => {
   const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
 
   // Loading state
-  if (authLoading || adminCheckLoading || loading) {
+  if (authLoading || authCheckLoading || loading) {
     return <OrdersLoadingState />;
   }
 
@@ -760,16 +835,28 @@ const OrderManagement = () => {
     );
   }
 
-  // Not authorized
-  if (!isAdmin) {
+  // Not authorized - check both admin and employee status
+  const canViewOrders =
+    isAdmin || hasPermission("view_orders") || hasPermission("manage_orders");
+
+  if (!canViewOrders) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center text-white">
           <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
           <p className="mb-4">
-            You need admin privileges to access the order management system.
+            You need proper permissions to access the order management system.
           </p>
-          <p className="mb-4 text-gray-400">User ID: {user.uid}</p>
+          <p className="mb-2 text-gray-400">User: {user.email}</p>
+          <p className="mb-4 text-gray-400">
+            Status: {isAdmin ? "Admin" : isEmployee ? "Employee" : "No Access"}
+          </p>
+          {isEmployee && (
+            <p className="mb-4 text-yellow-400">
+              Your role does not have "view_orders" or "manage_orders"
+              permission. Please contact your administrator.
+            </p>
+          )}
           <div className="space-x-4">
             <button
               onClick={() => (window.location.href = "/")}
@@ -792,7 +879,13 @@ const OrderManagement = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <OrdersHeader totalOrders={filteredOrders.length} user={user} />
+        <OrdersHeader
+          totalOrders={filteredOrders.length}
+          user={user}
+          isAdmin={isAdmin}
+          isEmployee={isEmployee}
+          employeeData={employeeData}
+        />
 
         <OrdersStats
           stats={stats}
@@ -821,6 +914,8 @@ const OrderManagement = () => {
           formatCurrency={formatCurrency}
           formatDate={formatDate}
           latePenaltyAmount={LATE_RETURN_PENALTY}
+          canManageOrders={hasPermission("manage_orders")}
+          isAdmin={isAdmin}
         />
 
         {showModal && selectedOrder && (
@@ -838,6 +933,8 @@ const OrderManagement = () => {
             formatCurrency={formatCurrency}
             formatDate={formatDate}
             latePenaltyAmount={LATE_RETURN_PENALTY}
+            canManageOrders={hasPermission("manage_orders")}
+            isAdmin={isAdmin}
           />
         )}
       </div>
