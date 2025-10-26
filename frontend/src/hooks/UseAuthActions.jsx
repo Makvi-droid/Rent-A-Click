@@ -22,6 +22,7 @@ import {
   collection,
   where,
   getDocs,
+  deleteDoc,
 } from "firebase/firestore";
 
 function UseAuthActions({
@@ -86,6 +87,7 @@ function UseAuthActions({
   };
 
   // Verify 2FA code (only for email/password customers)
+  // Verify 2FA code (only for email/password customers)
   const verify2FACode = async (user, inputCode) => {
     try {
       const verificationRef = doc(firestore, "temp_2fa_codes", user.uid);
@@ -106,7 +108,7 @@ function UseAuthActions({
         setTwoFactorError(
           "Verification code expired. Please request a new one."
         );
-        await verificationRef.delete();
+        await deleteDoc(verificationRef); // CHANGE THIS LINE
         return false;
       }
 
@@ -114,7 +116,7 @@ function UseAuthActions({
         setTwoFactorError(
           "Too many failed attempts. Please request a new code."
         );
-        await verificationRef.delete();
+        await deleteDoc(verificationRef); // CHANGE THIS LINE
         return false;
       }
 
@@ -132,7 +134,7 @@ function UseAuthActions({
         return false;
       }
 
-      await verificationRef.delete();
+      await deleteDoc(verificationRef); // CHANGE THIS LINE
       return true;
     } catch (error) {
       console.error("Error verifying 2FA code:", error);
@@ -408,43 +410,9 @@ function UseAuthActions({
       console.log("Is new user:", isNewUser);
       console.log("================================");
 
-      // For Google users, skip custom 2FA
-      if (provider === "google") {
-        console.log(
-          "✅ Google user - using Google's native 2FA, skipping custom 2FA"
-        );
-        showInfo(
-          "Google authentication successful! Google's security features are active.",
-          4000
-        );
-        await completeLoginProcess(
-          user,
-          userRole.data,
-          userRole.type,
-          isNewUser
-        );
-        return;
-      }
-
-      // ✅ Employees and Admins NEVER use custom 2FA
+      // ✅ Employees and Admins ALWAYS require custom 2FA (regardless of provider)
       if (userRole.type === "employee" || userRole.type === "admin") {
-        console.log("✅ Employee/Admin - no custom 2FA required");
-        await completeLoginProcess(
-          user,
-          userRole.data,
-          userRole.type,
-          isNewUser
-        );
-        return;
-      }
-
-      // Only customers with 2FA enabled and email provider need custom 2FA
-      if (
-        userRole.type === "customer" &&
-        userRole.data.twoFA &&
-        provider === "email"
-      ) {
-        console.log("🔐 Custom 2FA required for customer:", user.email);
+        console.log("🔐 Custom 2FA REQUIRED for Employee/Admin:", user.email);
 
         const codeGenerated = await generateAndSend2FACode(user, userRole.data);
 
@@ -459,21 +427,29 @@ function UseAuthActions({
           setTwoFactorCode("");
           setTwoFactorError("");
 
-          console.log("🔐 2FA modal should now be showing");
+          console.log("🔐 2FA modal opened for Employee/Admin");
           showInfo("Please check your email for the verification code.", 5000);
         } else {
           throw new Error("Failed to generate 2FA code");
         }
-      } else {
-        // No custom 2FA required - proceed directly
-        console.log("✅ No custom 2FA required");
+        return;
+      }
+
+      // ✅ Customers NEVER use custom 2FA - proceed directly
+      if (userRole.type === "customer") {
+        console.log("✅ Customer - no custom 2FA required");
         await completeLoginProcess(
           user,
           userRole.data,
           userRole.type,
           isNewUser
         );
+        return;
       }
+
+      // Fallback - should not reach here
+      console.log("⚠️ Unknown user type - proceeding without 2FA");
+      await completeLoginProcess(user, userRole.data, userRole.type, isNewUser);
     } catch (error) {
       console.error("Post-authentication error:", error);
       showError("Authentication process failed. Please try again.", 5000);
