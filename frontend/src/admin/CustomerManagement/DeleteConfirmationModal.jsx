@@ -1,9 +1,21 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, AlertTriangle, Trash2 } from "lucide-react";
 
 const DeleteConfirmationModal = ({ customer, onClose, onConfirm }) => {
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+  useEffect(() => {
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ zIndex: 99999 }}
+    >
       <div className="bg-gray-900 border border-red-700/50 rounded-2xl max-w-md w-full">
         {/* Header */}
         <div className="border-b border-gray-700 px-6 py-4 flex items-center justify-between">
@@ -96,6 +108,9 @@ const DeleteConfirmationModal = ({ customer, onClose, onConfirm }) => {
       </div>
     </div>
   );
+
+  // Use portal to render modal at body level
+  return createPortal(modalContent, document.body);
 };
 
 export default DeleteConfirmationModal;

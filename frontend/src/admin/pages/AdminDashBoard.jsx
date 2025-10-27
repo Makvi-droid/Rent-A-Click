@@ -21,6 +21,7 @@ import CustomerManagemet from "./CustomerManagement";
 import Analytics from "./Analytics";
 import Contact from "./Contact";
 import Settings from "./Settings";
+import ContentManagement from "./ContentManagement";
 
 const AdminDashboard = () => {
   const [user, loading, error] = useAuthState(auth);
@@ -149,6 +150,8 @@ const AdminDashboard = () => {
         return <Contact />;
       case "customers":
         return <CustomerManagemet />;
+      case "content_management":
+        return <ContentManagement />;
       default:
         return <Dashboard stats={mockStats} />;
     }

@@ -46,60 +46,35 @@ const RoleManagement = () => {
       description: "Access dashboard overview and statistics",
       section: "Dashboard",
     },
-    {
-      id: "manage_products",
-      name: "Manage Products",
-      description: "Create, edit, and delete products",
-      section: "Products",
-    },
+
     {
       id: "view_products",
       name: "View Products",
       description: "View product listings",
       section: "Products",
     },
-    {
-      id: "manage_orders",
-      name: "Manage Orders",
-      description: "Process and manage customer orders",
-      section: "Orders",
-    },
+
     {
       id: "view_orders",
       name: "View Orders",
       description: "View order history and details",
       section: "Orders",
     },
-    {
-      id: "manage_inventory",
-      name: "Manage Inventory",
-      description: "Update inventory levels and manage stock",
-      section: "Inventory",
-    },
+
     {
       id: "view_inventory",
       name: "View Inventory",
       description: "View inventory status",
       section: "Inventory",
     },
-    {
-      id: "manage_employees",
-      name: "Manage Employees",
-      description: "Add, edit, and remove employees",
-      section: "Employees",
-    },
+
     {
       id: "view_employees",
       name: "View Employees",
       description: "View employee list and details",
       section: "Employees",
     },
-    {
-      id: "manage_customers",
-      name: "Manage Customers",
-      description: "Manage customer accounts and information",
-      section: "Customers",
-    },
+
     {
       id: "view_customers",
       name: "View Customers",
@@ -130,11 +105,12 @@ const RoleManagement = () => {
       description: "Receive and view system notifications",
       section: "Notifications",
     },
+
     {
-      id: "manage_roles",
-      name: "Manage Roles",
-      description: "Create and manage user roles and permissions",
-      section: "Settings",
+      id: "view_content_management",
+      name: "Manage Static Content",
+      description: "Create and manage static contents on customer side",
+      section: "Content Management",
     },
   ];
 

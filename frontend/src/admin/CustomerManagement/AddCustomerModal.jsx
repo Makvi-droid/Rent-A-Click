@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, UserPlus } from "lucide-react";
 
 const AddCustomerModal = ({ onClose, onAdd }) => {
@@ -20,6 +21,14 @@ const AddCustomerModal = ({ onClose, onAdd }) => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
+
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -36,11 +45,14 @@ const AddCustomerModal = ({ onClose, onAdd }) => {
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+  const modalContent = (
+    <div
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ zIndex: 99999 }}
+    >
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
         {/* Header */}
-        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
               <UserPlus className="w-5 h-5 text-white" />
@@ -55,8 +67,8 @@ const AddCustomerModal = ({ onClose, onAdd }) => {
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        {/* Form Content */}
+        <div className="p-6 space-y-6">
           {/* Account Credentials */}
           <div>
             <h3 className="text-lg font-semibold text-white mb-4">
@@ -259,7 +271,8 @@ const AddCustomerModal = ({ onClose, onAdd }) => {
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={handleSubmit}
               disabled={
                 isSubmitting ||
                 !formData.fullName ||
@@ -278,10 +291,13 @@ const AddCustomerModal = ({ onClose, onAdd }) => {
               )}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
+
+  // Use portal to render modal at body level
+  return createPortal(modalContent, document.body);
 };
 
 export default AddCustomerModal;

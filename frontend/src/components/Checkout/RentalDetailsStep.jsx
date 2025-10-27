@@ -1,8 +1,24 @@
-// RentalDetailsStep.jsx - FIXED: Added setFormData and setErrors props
-import React from "react";
+// RentalDetailsStep.jsx - FIXED: Added blocked time slots integration
+import React, { useState, useEffect } from "react";
 import { Calendar, Clock, MapPin, Truck, AlertCircle } from "lucide-react";
 import DatePickerInput from "./DatePickerInput";
 import MandatoryIDVerification from "./MandatoryIDVerification";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../../firebase";
+
+const TIME_SLOTS = [
+  { value: "08:00", label: "8:00 AM" },
+  { value: "09:00", label: "9:00 AM" },
+  { value: "10:00", label: "10:00 AM" },
+  { value: "11:00", label: "11:00 AM" },
+  { value: "12:00", label: "12:00 PM" },
+  { value: "13:00", label: "1:00 PM" },
+  { value: "14:00", label: "2:00 PM" },
+  { value: "15:00", label: "3:00 PM" },
+  { value: "16:00", label: "4:00 PM" },
+  { value: "17:00", label: "5:00 PM" },
+  { value: "18:00", label: "6:00 PM" },
+];
 
 const RentalDetailsStep = ({
   formData,
@@ -19,6 +35,82 @@ const RentalDetailsStep = ({
   onGoogleFormSubmission,
   savedIdUrl,
 }) => {
+  const [blockedPickupSlots, setBlockedPickupSlots] = useState([]);
+  const [blockedReturnSlots, setBlockedReturnSlots] = useState([]);
+
+  // Fetch blocked time slots when dates change
+  useEffect(() => {
+    const fetchBlockedTimes = async () => {
+      if (!formData.startDate) {
+        setBlockedPickupSlots([]);
+        return;
+      }
+
+      try {
+        const snapshot = await getDocs(collection(db, "businessSettings"));
+        const data = snapshot.docs.map((doc) => doc.data());
+
+        const startDateKey = formData.startDate.toISOString().split("T")[0];
+        const blocked = [];
+
+        data.forEach((setting) => {
+          if (
+            setting.type === "time_slots" &&
+            setting.dates?.includes(startDateKey)
+          ) {
+            blocked.push(...(setting.blockedSlots || []));
+          }
+        });
+
+        setBlockedPickupSlots(blocked);
+      } catch (error) {
+        console.error("Error fetching blocked pickup times:", error);
+      }
+    };
+
+    fetchBlockedTimes();
+  }, [formData.startDate]);
+
+  useEffect(() => {
+    const fetchBlockedReturnTimes = async () => {
+      if (!formData.endDate) {
+        setBlockedReturnSlots([]);
+        return;
+      }
+
+      try {
+        const snapshot = await getDocs(collection(db, "businessSettings"));
+        const data = snapshot.docs.map((doc) => doc.data());
+
+        const endDateKey = formData.endDate.toISOString().split("T")[0];
+        const blocked = [];
+
+        data.forEach((setting) => {
+          if (
+            setting.type === "time_slots" &&
+            setting.dates?.includes(endDateKey)
+          ) {
+            blocked.push(...(setting.blockedSlots || []));
+          }
+        });
+
+        setBlockedReturnSlots(blocked);
+      } catch (error) {
+        console.error("Error fetching blocked return times:", error);
+      }
+    };
+
+    fetchBlockedReturnTimes();
+  }, [formData.endDate]);
+
+  // Filter available time slots
+  const availablePickupSlots = TIME_SLOTS.filter(
+    (slot) => !blockedPickupSlots.includes(slot.value)
+  );
+  const availableReturnSlots = TIME_SLOTS.filter(
+    (slot) => !blockedReturnSlots.includes(slot.value)
+  );
+
   return (
     <div className="space-y-8">
       <div className="flex items-center space-x-3 mb-8">
@@ -154,17 +246,17 @@ const RentalDetailsStep = ({
                 required
               >
                 <option value="">Select pickup time</option>
-                <option value="08:00">8:00 AM</option>
-                <option value="09:00">9:00 AM</option>
-                <option value="10:00">10:00 AM</option>
-                <option value="11:00">11:00 AM</option>
-                <option value="12:00">12:00 PM</option>
-                <option value="13:00">1:00 PM</option>
-                <option value="14:00">2:00 PM</option>
-                <option value="15:00">3:00 PM</option>
-                <option value="16:00">4:00 PM</option>
-                <option value="17:00">5:00 PM</option>
+                {availablePickupSlots.map((slot) => (
+                  <option key={slot.value} value={slot.value}>
+                    {slot.label}
+                  </option>
+                ))}
               </select>
+              {blockedPickupSlots.length > 0 && (
+                <p className="text-yellow-400 text-xs mt-1">
+                  Some time slots are unavailable for the selected date
+                </p>
+              )}
               {errors.pickupTime && (
                 <div className="flex items-center space-x-2 mt-2">
                   <AlertCircle
@@ -199,17 +291,17 @@ const RentalDetailsStep = ({
                   ? "Select pickup time for return"
                   : "Select return time"}
               </option>
-              <option value="08:00">8:00 AM</option>
-              <option value="09:00">9:00 AM</option>
-              <option value="10:00">10:00 AM</option>
-              <option value="11:00">11:00 AM</option>
-              <option value="12:00">12:00 PM</option>
-              <option value="13:00">1:00 PM</option>
-              <option value="14:00">2:00 PM</option>
-              <option value="15:00">3:00 PM</option>
-              <option value="16:00">4:00 PM</option>
-              <option value="17:00">5:00 PM</option>
+              {availableReturnSlots.map((slot) => (
+                <option key={slot.value} value={slot.value}>
+                  {slot.label}
+                </option>
+              ))}
             </select>
+            {blockedReturnSlots.length > 0 && (
+              <p className="text-yellow-400 text-xs mt-1">
+                Some time slots are unavailable for the selected date
+              </p>
+            )}
             {errors.returnTime && (
               <div className="flex items-center space-x-2 mt-2">
                 <AlertCircle className="text-red-400 flex-shrink-0" size={16} />
@@ -258,7 +350,12 @@ const formatTime = (time24) => {
   if (!time24) return "";
   try {
     const [hour, minute] = time24.split(":");
-    const hour12 = parseInt(hour) > 12 ? parseInt(hour) - 12 : parseInt(hour);
+    const hour12 =
+      parseInt(hour) > 12
+        ? parseInt(hour) - 12
+        : parseInt(hour) === 0
+        ? 12
+        : parseInt(hour);
     const ampm = parseInt(hour) >= 12 ? "PM" : "AM";
     return `${hour12}:${minute} ${ampm}`;
   } catch (error) {

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, Save } from "lucide-react";
 
 const EditCustomerModal = ({ customer, onClose, onSave }) => {
@@ -19,6 +20,14 @@ const EditCustomerModal = ({ customer, onClose, onSave }) => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -57,11 +66,14 @@ const EditCustomerModal = ({ customer, onClose, onSave }) => {
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+  const modalContent = (
+    <div
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ zIndex: 99999 }}
+    >
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
         {/* Header */}
-        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
               <Save className="w-5 h-5 text-white" />
@@ -299,6 +311,9 @@ const EditCustomerModal = ({ customer, onClose, onSave }) => {
       </div>
     </div>
   );
+
+  // Use portal to render modal at body level, bypassing any parent z-index contexts
+  return createPortal(modalContent, document.body);
 };
 
 export default EditCustomerModal;

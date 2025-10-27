@@ -25,6 +25,14 @@ const ViewCustomerModal = ({ customer, onClose }) => {
     });
   };
 
+  useEffect(() => {
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
+
   const InfoRow = ({ icon: Icon, label, value, className = "" }) => (
     <div className={`flex items-start gap-3 ${className}`}>
       <div className="p-2 bg-gray-800 rounded-lg">
@@ -38,7 +46,10 @@ const ViewCustomerModal = ({ customer, onClose }) => {
   );
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ zIndex: 99999 }}
+    >
       <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
