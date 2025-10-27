@@ -6,20 +6,18 @@ import Promotion from "../components/Home/Promotion";
 import Steps from "../components/Home/Steps";
 import Navbar from "../components/Navbar";
 
-
-function HomePage(){
-    return(
-        <>
-            <Navbar/>
-            <Hero/>
-            <Featured/>
-            <Category/>
-            <Steps/>
-            
-            <Gallery/>
-                        
-        </>
-    );
+function HomePage() {
+  return (
+    <>
+      <Navbar />
+      <Hero />
+      <Featured />
+      <Category />
+      <Steps />
+      <Promotion />
+      <Gallery />
+    </>
+  );
 }
 
-export default HomePage
+export default HomePage;

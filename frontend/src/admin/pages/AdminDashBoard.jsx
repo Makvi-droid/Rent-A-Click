@@ -22,6 +22,8 @@ import Analytics from "./Analytics";
 import Contact from "./Contact";
 import Settings from "./Settings";
 import ContentManagement from "./ContentManagement";
+import AuditTrail from "./AuditTrail";
+import NotificationsTab from "./NotificationsTab";
 
 const AdminDashboard = () => {
   const [user, loading, error] = useAuthState(auth);
@@ -145,13 +147,15 @@ const AdminDashboard = () => {
       case "settings":
         return <Settings />;
       case "notifications":
-        return <ComingSoon title="Notifications" />;
+        return <NotificationsTab />;
       case "contact":
         return <Contact />;
       case "customers":
         return <CustomerManagemet />;
       case "content_management":
         return <ContentManagement />;
+      case "audit_trail":
+        return <AuditTrail />;
       default:
         return <Dashboard stats={mockStats} />;
     }

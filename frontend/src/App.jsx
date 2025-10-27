@@ -24,36 +24,41 @@ import Help from "./pages/Help";
 import AccountPage from "./pages/AccountPage";
 import NotificationPage from "./pages/NotificationPage";
 import HelpSupportPage from "./pages/HelpSupportPage";
+import NottificationsProvider, {
+  NotificationsProvider,
+} from "./admin/pages/NotificationsContext";
 
 function App() {
   return (
     <>
       <ToastProvider>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/homePage" element={<HomePage />} />
-          <Route path="/profilePage" element={<ProfilePage />} />
-          <Route path="/productsPage" element={<ProductsPage />} />
-          <Route path="/wishlistPage" element={<Wishlist />} />
-          <Route path="/adminDashboard" element={<AdminDashboard />} />
-          <Route path="/cartPage" element={<AddToCart />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/rentals" element={<MyRentals />} />
-          <Route path="/userManagement" element={<UserManagement />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/reviews" element={<Reviews />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/billing" element={<Billings />} />
-          <Route path="/security" element={<SecuritySettings />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/help" element={<Help />} />
-          <Route path="/accountsPage" element={<AccountPage />} />
-          <Route path="/notificationPage" element={<NotificationPage />} />
-          <Route path="/helpSupportPage" element={<HelpSupportPage />} />
-        </Routes>
-        <Footer />
+        <NotificationsProvider>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/homePage" element={<HomePage />} />
+            <Route path="/profilePage" element={<ProfilePage />} />
+            <Route path="/productsPage" element={<ProductsPage />} />
+            <Route path="/wishlistPage" element={<Wishlist />} />
+            <Route path="/adminDashboard" element={<AdminDashboard />} />
+            <Route path="/cartPage" element={<AddToCart />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/rentals" element={<MyRentals />} />
+            <Route path="/userManagement" element={<UserManagement />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/reviews" element={<Reviews />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/billing" element={<Billings />} />
+            <Route path="/security" element={<SecuritySettings />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/help" element={<Help />} />
+            <Route path="/accountsPage" element={<AccountPage />} />
+            <Route path="/notificationPage" element={<NotificationPage />} />
+            <Route path="/helpSupportPage" element={<HelpSupportPage />} />
+          </Routes>
+          <Footer />
+        </NotificationsProvider>
       </ToastProvider>
     </>
   );

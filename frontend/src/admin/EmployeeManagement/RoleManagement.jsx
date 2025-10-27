@@ -112,6 +112,13 @@ const RoleManagement = () => {
       description: "Create and manage static contents on customer side",
       section: "Content Management",
     },
+
+    {
+      id: "view_audit_trail",
+      name: "Manage Audit Trail",
+      description: "Access to audit trails",
+      section: "Audit Trail",
+    },
   ];
 
   useEffect(() => {

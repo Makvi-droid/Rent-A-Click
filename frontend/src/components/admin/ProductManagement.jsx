@@ -16,6 +16,7 @@ import ProductCard from "../../admin/ProductsManagement/ProductCard";
 import ProductModal from "../../admin/ProductsManagement/ProductModal";
 import FilterControls from "../../admin/ProductsManagement/FilterControls";
 import { Plus, Package, AlertCircle } from "lucide-react";
+import { logProductAction, AUDIT_ACTIONS } from "../../utils/auditLogger";
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
@@ -186,6 +187,17 @@ const ProductManagement = () => {
       // Use setDoc with custom document ID
       const docRef = doc(collection(firestore, "products"), productId);
       await setDoc(docRef, newProduct);
+      await logProductAction(
+        AUDIT_ACTIONS.ADD_PRODUCT,
+        {
+          ...productData,
+          id: docRef.id,
+        },
+        {
+          price: productData.pricing?.daily,
+          stockQuantity: productData.stock,
+        }
+      );
       console.log("Product added successfully with custom ID:", productId);
 
       // Refresh data

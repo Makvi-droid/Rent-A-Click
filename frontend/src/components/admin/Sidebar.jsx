@@ -25,6 +25,7 @@ import {
   Contact,
   Lock,
   LayoutTemplate,
+  Shield,
 } from "lucide-react";
 
 // Permission to menu item mapping
@@ -45,6 +46,7 @@ const permissionToMenuMap = {
   manage_settings: "settings",
   view_notifications: "notifications",
   view_content_management: "content_management",
+  view_audit_trail: "audit_trail",
 };
 
 // Sidebar Component
@@ -212,6 +214,12 @@ const Sidebar = ({ isOpen, setIsOpen, activeSection, setActiveSection }) => {
       label: "Content Management",
       icon: LayoutTemplate,
       color: "text-yellow-600",
+    },
+    {
+      id: "audit_trail",
+      label: "Audit Trail",
+      icon: Shield,
+      color: "text-purple-600",
     },
   ];
 

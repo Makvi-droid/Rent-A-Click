@@ -8,6 +8,7 @@ import RealtimeStats from "../Dashboard/RealtimeStats";
 import RealtimeActivity from "../Dashboard/RealtimeActivity";
 import RealtimeCharts from "../Dashboard/RealtimeCharts";
 import RealtimeNotifications from "../Dashboard/RealtimeNotifications";
+import NotificationsTab from "./NotificationsTab";
 
 const Dashboard = () => {
   const [user, loading, error] = useAuthState(auth);
@@ -48,6 +49,8 @@ const Dashboard = () => {
             </div>
           </div>
         );
+      case "notifications":
+        return <NotificationsTab />;
       default:
         return (
           <div className="space-y-6">

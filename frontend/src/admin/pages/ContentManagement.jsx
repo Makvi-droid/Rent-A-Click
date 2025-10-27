@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import CheckoutSettings from "../ContentManagement/CheckoutSettings";
+import PromotionsManagement from "../ContentManagement/PromotionsManagement";
 
 function ContentManagement() {
   const [activeTab, setActiveTab] = useState("checkout");
@@ -29,14 +30,14 @@ function ContentManagement() {
             Checkout Settings
           </button>
           <button
-            onClick={() => setActiveTab("website")}
+            onClick={() => setActiveTab("promotions")}
             className={`px-6 py-3 font-medium transition-colors ${
-              activeTab === "website"
+              activeTab === "promotions"
                 ? "text-purple-400 border-b-2 border-purple-400"
                 : "text-gray-400 hover:text-white"
             }`}
           >
-            Website Content
+            Promotions
           </button>
           <button
             onClick={() => setActiveTab("other")}
@@ -58,13 +59,7 @@ function ContentManagement() {
           />
         )}
 
-        {activeTab === "website" && (
-          <div className="text-center py-12 bg-gray-800 rounded-xl border border-gray-700">
-            <p className="text-gray-400">
-              Website content management features coming soon...
-            </p>
-          </div>
-        )}
+        {activeTab === "promotions" && <PromotionsManagement />}
 
         {activeTab === "other" && (
           <div className="text-center py-12 bg-gray-800 rounded-xl border border-gray-700">

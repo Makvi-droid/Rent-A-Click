@@ -31,7 +31,6 @@ export default function Promotion() {
   const [currentOffer, setCurrentOffer] = useState(0);
   const [activePromotions, setActivePromotions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 100);
@@ -39,45 +38,34 @@ export default function Promotion() {
   }, []);
 
   useEffect(() => {
-    // Simplified query - just get all promotions and filter client-side
-    const q = query(collection(db, "promotions"));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const promos = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        // Filter and sort client-side to avoid needing composite index
-        const validPromos = promos
-          .filter((promo) => {
-            // Must be explicitly active
-            if (promo.isActive !== true) return false;
-
-            // No dates set means it's always live (as long as isActive is true)
-            if (!promo.startDate || !promo.endDate) return true;
-
-            const now = new Date();
-            const start = new Date(promo.startDate + "T00:00:00");
-            const end = new Date(promo.endDate + "T23:59:59");
-
-            // Only show if current date/time is within range
-            return now >= start && now <= end;
-          })
-          .sort((a, b) => (a.priority || 999) - (b.priority || 999)); // Sort by priority
-
-        setActivePromotions(validPromos);
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error("Error fetching promotions:", err);
-        setError(err.message);
-        setLoading(false);
-      }
+    const q = query(
+      collection(db, "promotions"),
+      where("isActive", "==", true),
+      orderBy("priority", "asc")
     );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const promos = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Filter to only show promotions that are currently live
+      const validPromos = promos.filter((promo) => {
+        // No dates set means it's always live (as long as isActive is true)
+        if (!promo.startDate || !promo.endDate) return true;
+
+        const now = new Date();
+        const start = new Date(promo.startDate + "T00:00:00");
+        const end = new Date(promo.endDate + "T23:59:59");
+
+        // Only show if current date/time is within range
+        return now >= start && now <= end;
+      });
+
+      setActivePromotions(validPromos);
+      setLoading(false);
+    });
 
     return () => unsubscribe();
   }, []);
@@ -157,16 +145,9 @@ export default function Promotion() {
       <section className="py-24 bg-gradient-to-b from-black via-gray-900 to-black">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400 mx-auto"></div>
-          <p className="text-gray-400 mt-4">Loading promotions...</p>
         </div>
       </section>
     );
-  }
-
-  // Show error state if there's an error
-  if (error) {
-    console.error("Promotion error:", error);
-    return null; // Silently hide the section if there's an error
   }
 
   // Don't render section at all if no active promotions
