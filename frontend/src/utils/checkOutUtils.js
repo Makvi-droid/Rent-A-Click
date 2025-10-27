@@ -1,4 +1,4 @@
-// checkoutUtils.js - FIXED: Added pickupTime and returnTime to rentalDetails
+// Enhanced checkoutUtils.js - Excludes blocked dates from rental calculations
 import {
   collection,
   addDoc,
@@ -31,13 +31,140 @@ export const getDailyRate = (item) => {
   return 0;
 };
 
-export const calculateRentalDays = (startDate, endDate) => {
+// NEW: Fetch blocked dates from Firebase
+export const fetchBlockedDates = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, "businessSettings"));
+    const data = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    return data;
+  } catch (error) {
+    console.error("Error fetching blocked dates:", error);
+    return [];
+  }
+};
+
+// NEW: Check if a specific date is blocked
+export const isDateBlocked = (date, blockedDates) => {
+  if (!date || !blockedDates || blockedDates.length === 0) return false;
+
+  const dateKey = date.toISOString().split("T")[0];
+  const dayOfWeek = date.getDay();
+
+  // Check full day blocks
+  const hasFullDayBlock = blockedDates.some(
+    (b) =>
+      b.type === "full_day" &&
+      Array.isArray(b.dates) &&
+      b.dates.includes(dateKey)
+  );
+
+  // Check date range blocks
+  const hasRangeBlock = blockedDates.some((b) => {
+    if (b.type !== "date_range") return false;
+    if (!b.startDate || !b.endDate) return false;
+    return dateKey >= b.startDate && dateKey <= b.endDate;
+  });
+
+  // Check recurring blocks
+  const hasRecurringBlock = blockedDates.some(
+    (b) => b.type === "recurring" && b.recurringDay === dayOfWeek
+  );
+
+  return hasFullDayBlock || hasRangeBlock || hasRecurringBlock;
+};
+
+// NEW: Get list of blocked dates between start and end date
+export const getBlockedDatesInRange = (startDate, endDate, blockedDates) => {
+  if (!startDate || !endDate || !blockedDates) return [];
+
+  const blocked = [];
+  const current = new Date(startDate);
+  const end = new Date(endDate);
+
+  while (current <= end) {
+    if (isDateBlocked(current, blockedDates)) {
+      blocked.push(new Date(current));
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  return blocked;
+};
+
+// ENHANCED: Calculate rental days excluding blocked dates
+export const calculateRentalDays = (startDate, endDate, blockedDates = []) => {
   if (!startDate || !endDate) return 0;
+
   const start = new Date(startDate);
   const end = new Date(endDate);
   const diffTime = Math.abs(end - start);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return Math.max(1, diffDays);
+  const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (totalDays === 0) return 1; // Same day rental
+
+  // If no blocked dates provided, return total days
+  if (!blockedDates || blockedDates.length === 0) {
+    return Math.max(1, totalDays);
+  }
+
+  // Count blocked days in the range
+  const blockedDaysInRange = getBlockedDatesInRange(
+    startDate,
+    endDate,
+    blockedDates
+  );
+  const availableDays = totalDays - blockedDaysInRange.length;
+
+  // Ensure at least 1 day is counted
+  return Math.max(1, availableDays);
+};
+
+// NEW: Get rental calculation details
+export const getRentalCalculationDetails = (
+  startDate,
+  endDate,
+  blockedDates = []
+) => {
+  if (!startDate || !endDate) {
+    return {
+      totalDays: 0,
+      blockedDays: 0,
+      billableDays: 0,
+      blockedDatesArray: [],
+    };
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = Math.abs(end - start);
+  const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (totalDays === 0) {
+    return {
+      totalDays: 1,
+      blockedDays: 0,
+      billableDays: 1,
+      blockedDatesArray: [],
+    };
+  }
+
+  const blockedDatesArray = getBlockedDatesInRange(
+    startDate,
+    endDate,
+    blockedDates
+  );
+  const blockedDays = blockedDatesArray.length;
+  const billableDays = Math.max(1, totalDays - blockedDays);
+
+  return {
+    totalDays,
+    blockedDays,
+    billableDays,
+    blockedDatesArray,
+  };
 };
 
 export const calculateDeliveryFee = (deliveryMethod, subtotal) => {
@@ -202,7 +329,7 @@ const formatTimeTo12Hour = (time24) => {
     return `${hour12}:${minute} ${period}`;
   } catch (error) {
     console.error("Error formatting time:", error);
-    return time24; // Return original if formatting fails
+    return time24;
   }
 };
 
@@ -219,27 +346,19 @@ export const saveCheckoutToFirebase = async (
 ) => {
   try {
     console.log("Saving checkout to Firebase with ID:", checkoutId);
-    console.log("📅 Time data being saved:", {
-      pickupTime: formData.pickupTime,
-      returnTime: formData.returnTime,
-      deliveryMethod: formData.deliveryMethod,
+    console.log("📅 Rental calculation:", {
+      totalDays: pricing.totalDays,
+      blockedDays: pricing.blockedDays,
+      billableDays: pricing.rentalDays,
     });
 
-    // Convert times to 12-hour format for storage
     const pickupTime12Hour = formatTimeTo12Hour(formData.pickupTime);
     const returnTime12Hour = formatTimeTo12Hour(formData.returnTime);
 
-    console.log("🕐 Formatted times:", {
-      pickupTime: pickupTime12Hour,
-      returnTime: returnTime12Hour,
-    });
-
     const checkoutData = {
-      // Order identification
       id: checkoutId,
       orderNumber: checkoutId,
 
-      // Customer information - Primary reference to customers collection
       customerId: customerDocId,
       customerInfo: {
         customerDocId: customerDocId,
@@ -251,27 +370,23 @@ export const saveCheckoutToFirebase = async (
         fullName: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
       },
 
-      // Legacy compatibility (can be removed later)
       userId: user?.uid || null,
       userEmail: user?.email || formData.email,
 
-      // ✅ FIXED: Rental Details - NOW INCLUDES PICKUP AND RETURN TIMES IN 12-HOUR FORMAT
       rentalDetails: {
         startDate: formData.startDate,
         endDate: formData.endDate,
-        rentalDays: pricing.rentalDays,
+        totalDays: pricing.totalDays || pricing.rentalDays,
+        blockedDays: pricing.blockedDays || 0,
+        billableDays: pricing.rentalDays,
         deliveryMethod: formData.deliveryMethod,
-        // ⭐ ADDED: Time selections in 12-hour AM/PM format
-        pickupTime: pickupTime12Hour, // e.g., "9:00 AM"
-        returnTime: returnTime12Hour, // e.g., "5:00 PM"
-        // Store original 24-hour format as backup
+        pickupTime: pickupTime12Hour,
+        returnTime: returnTime12Hour,
         pickupTime24Hour: formData.pickupTime || null,
         returnTime24Hour: formData.returnTime || null,
-        // Additional time metadata
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
 
-      // Delivery Address
       deliveryAddress:
         formData.deliveryMethod === "delivery"
           ? {
@@ -286,7 +401,6 @@ export const saveCheckoutToFirebase = async (
             }
           : null,
 
-      // Payment Information with enhanced PayPal details
       paymentInfo: {
         method: formData.paymentMethod,
         paypalEmail:
@@ -310,7 +424,6 @@ export const saveCheckoutToFirebase = async (
             : null,
       },
 
-      // Rental Items
       items: rentalItems.map((item) => ({
         id: item.id,
         name: item.name,
@@ -324,7 +437,6 @@ export const saveCheckoutToFirebase = async (
         brand: item.brand || null,
       })),
 
-      // Pricing Breakdown
       pricing: {
         subtotal: Number(pricing.subtotal.toFixed(2)),
         deliveryFee: Number(pricing.deliveryFee.toFixed(2)),
@@ -335,14 +447,12 @@ export const saveCheckoutToFirebase = async (
         currency: "PHP",
       },
 
-      // Additional Options
       options: {
         insurance: formData.insurance,
         newsletter: formData.newsletter,
         specialInstructions: formData.specialInstructions?.trim() || null,
       },
 
-      // ⭐ ADDED: ID Verification Details
       verification: {
         idRequired: true,
         idSubmitted: formData.idSubmitted || false,
@@ -350,20 +460,16 @@ export const saveCheckoutToFirebase = async (
         penaltyAgreementAccepted: formData.penaltyAgreementAccepted || true,
       },
 
-      // Status based on payment method
       status: formData.paymentMethod === "paypal" ? "confirmed" : "pending",
       paymentStatus: formData.paymentMethod === "paypal" ? "paid" : "pending",
 
-      // Timestamps
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       submittedAt: formData.submittedAt || new Date().toISOString(),
 
-      // Terms acceptance
       termsAccepted: formData.termsAccepted,
       termsAcceptedAt: formData.termsAccepted ? serverTimestamp() : null,
 
-      // Metadata for customers collection
       metadata: {
         source: "web-checkout",
         userAgent: navigator.userAgent,
@@ -374,22 +480,15 @@ export const saveCheckoutToFirebase = async (
           0
         ),
         collectionVersion: "customers-v1",
-        checkoutVersion: "2.1", // Updated version
+        checkoutVersion: "2.2",
         customerProfileExists: !!customerDocId,
         autoCreatedProfile: shouldCreateCustomerProfile,
       },
     };
 
-    // Save to Firestore with the custom ID
     await setDoc(doc(db, "checkouts", checkoutId), checkoutData);
 
     console.log("✅ Checkout saved successfully:", checkoutId);
-    console.log("✅ Time data confirmed in Firebase:", {
-      pickupTime: checkoutData.rentalDetails.pickupTime,
-      returnTime: checkoutData.rentalDetails.returnTime,
-      format: "12-hour AM/PM",
-    });
-
     return checkoutData;
   } catch (error) {
     console.error("❌ Error saving checkout to Firebase:", error);

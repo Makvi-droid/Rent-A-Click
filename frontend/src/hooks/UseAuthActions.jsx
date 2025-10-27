@@ -77,7 +77,14 @@ function UseAuthActions({
 
       console.log(`2FA Code for ${user.email}: ${code}`);
 
-      if (process.env.NODE_ENV === "development") {
+      // Show 2FA code in toast for localhost and Netlify deployments
+      const hostname = window.location.hostname;
+      const isDevEnvironment =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname.includes("netlify.app");
+
+      if (isDevEnvironment) {
         showInfo(`Development Mode - 2FA Code: ${code}`, 15000);
       }
 
@@ -111,7 +118,7 @@ function UseAuthActions({
         setTwoFactorError(
           "Verification code expired. Please request a new one."
         );
-        await deleteDoc(verificationRef); // CHANGE THIS LINE
+        await deleteDoc(verificationRef);
         return false;
       }
 
@@ -119,7 +126,7 @@ function UseAuthActions({
         setTwoFactorError(
           "Too many failed attempts. Please request a new code."
         );
-        await deleteDoc(verificationRef); // CHANGE THIS LINE
+        await deleteDoc(verificationRef);
         return false;
       }
 
@@ -137,7 +144,7 @@ function UseAuthActions({
         return false;
       }
 
-      await deleteDoc(verificationRef); // CHANGE THIS LINE
+      await deleteDoc(verificationRef);
       return true;
     } catch (error) {
       console.error("Error verifying 2FA code:", error);

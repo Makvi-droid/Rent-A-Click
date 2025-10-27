@@ -1,4 +1,4 @@
-// FIXED: Enhanced Checkout Component - Mandatory ID Verification System
+// Checkout.jsx - UPDATED: Excludes blocked dates from cost calculation
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -16,8 +16,6 @@ import CheckoutFormSection from "../components/Checkout/CheckoutFormSection";
 import CheckoutTrustIndicators from "../components/Checkout/CheckoutTrustIndicators";
 import Navbar from "../components/Navbar";
 import { handleMandatoryIDSubmission } from "../components/Checkout/handleMandatoryIDSubmission";
-
-// Separated components
 import CheckoutAuthRequired from "../components/Checkout/CheckoutAuthRequired";
 import CheckoutEmptyCart from "../components/Checkout/CheckoutEmptyCart";
 
@@ -28,6 +26,8 @@ import {
   calculateRentalDays,
   calculateDeliveryFee,
   getTodayDate,
+  fetchBlockedDates,
+  getRentalCalculationDetails,
 } from "../utils/checkOutUtils";
 import { validateStep } from "../components/Checkout/checkoutValidation";
 import { useCheckoutData } from "../hooks/useCheckoutData";
@@ -47,17 +47,18 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // PayPal state variables
+  // NEW: State for blocked dates
+  const [blockedDates, setBlockedDates] = useState([]);
+  const [loadingBlockedDates, setLoadingBlockedDates] = useState(true);
+
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [paypalPaymentDetails, setPaypalPaymentDetails] = useState(null);
 
-  // Get selected items from navigation state
   const selectedItemsFromCart = location.state?.selectedItems || [];
   const totalQuantityFromCart = location.state?.totalQuantity || 0;
   const totalAmountFromCart = location.state?.totalAmount || 0;
   const customerId = location.state?.customerId || null;
 
-  // Use custom hook for customer data management
   const {
     customerData,
     customerDocId,
@@ -65,7 +66,23 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     shouldCreateCustomerProfile,
   } = useCheckoutData(user, authLoading, customerId);
 
-  // Redirect if no selected items
+  // NEW: Fetch blocked dates on component mount
+  useEffect(() => {
+    const loadBlockedDates = async () => {
+      try {
+        setLoadingBlockedDates(true);
+        const blocked = await fetchBlockedDates();
+        setBlockedDates(blocked);
+        console.log("✅ Loaded blocked dates:", blocked.length);
+      } catch (error) {
+        console.error("Error loading blocked dates:", error);
+      } finally {
+        setLoadingBlockedDates(false);
+      }
+    };
+    loadBlockedDates();
+  }, []);
+
   useEffect(() => {
     if (
       !authLoading &&
@@ -76,49 +93,33 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     }
   }, [authLoading, loadingCustomerData, selectedItemsFromCart, navigate]);
 
-  // Form data with mandatory ID verification for all rentals
   const [formData, setFormData] = useState({
-    // Rental Details
     startDate: null,
     endDate: null,
     deliveryMethod: "pickup",
-
-    // Time Selection Fields
     pickupTime: "",
     returnTime: "",
-
-    // MANDATORY: ID verification for all rentals
     idSubmitted: false,
-
-    // Customer Information
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
-
-    // Delivery Address
     address: "",
     apartment: "",
     city: "",
     state: "",
     zipCode: "",
-
-    // Payment Method
     paymentMethod: "cash",
     paypalEmail: "",
-
-    // Additional Options
     insurance: false,
     newsletter: false,
     specialInstructions: "",
     termsAccepted: false,
-    idSubmitted: false,
-    usingSavedId: false, // ADD THIS
-    uploadNewId: false, // ADD THIS
+    usingSavedId: false,
+    uploadNewId: false,
     savedIdUrl: "",
   });
 
-  // Update form data when customer data is loaded
   useEffect(() => {
     if (customerData) {
       setFormData((prev) => ({
@@ -149,10 +150,8 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     }
   }, [customerData, user]);
 
-  // Use selected items from cart
   const rentalItems = selectedItemsFromCart;
 
-  // PayPal configuration
   const paypalInitialOptions = {
     "client-id":
       "AYzH5iuulriuNHc9Hk4kTONtofhUOrLK0dxI-1yyoI8-liOzYf_fuLYxQ9Z789-vgW6Qph_nAagIwFJ8",
@@ -166,8 +165,15 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Pricing calculations
-  const rentalDays = calculateRentalDays(formData.startDate, formData.endDate);
+  // NEW: Enhanced pricing calculations with blocked dates exclusion
+  const rentalCalculation = getRentalCalculationDetails(
+    formData.startDate,
+    formData.endDate,
+    blockedDates
+  );
+
+  const rentalDays = rentalCalculation.billableDays;
+
   const subtotal = rentalItems.reduce(
     (sum, item) => sum + getDailyRate(item) * (item.quantity || 1) * rentalDays,
     0
@@ -185,9 +191,11 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     tax,
     total,
     rentalDays,
+    totalDays: rentalCalculation.totalDays,
+    blockedDays: rentalCalculation.blockedDays,
+    blockedDatesArray: rentalCalculation.blockedDatesArray,
   };
 
-  // PayPal handlers
   const { handlePayPalSuccess, handlePayPalError } = createPayPalHandlers(
     setPaymentStatus,
     setPaypalPaymentDetails,
@@ -195,7 +203,6 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     setCurrentStep
   );
 
-  // Submit handler
   const submitHandler = createSubmitHandler(
     formData,
     paymentStatus,
@@ -210,12 +217,10 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     navigate
   );
 
-  // FIXED: Use the new mandatory ID submission handler
   const handleGoogleFormSubmission = () => {
     handleMandatoryIDSubmission(formData, setFormData, setErrors);
   };
 
-  // Event handlers
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -223,7 +228,6 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
       [name]: type === "checkbox" ? checked : value,
     }));
 
-    // Clear specific error when user starts correcting it
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -238,7 +242,6 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
       [name]: date,
     }));
 
-    // Clear related date errors
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -247,30 +250,14 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     }
   };
 
-  // FIXED: Enhanced validation without hasCameraRental dependency
   const validateCurrentStep = (step) => {
-    console.log(`[VALIDATION] Checking step ${step}`, {
-      step,
-      idSubmitted: formData.idSubmitted,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      pickupTime: formData.pickupTime,
-      returnTime: formData.returnTime,
-    });
+    console.log(`[VALIDATION] Checking step ${step}`);
 
     const validation = validateStep(step, formData);
 
-    console.log(`[VALIDATION] Result for step ${step}:`, {
-      isValid: validation.isValid,
-      errors: validation.errors,
-      errorCount: Object.keys(validation.errors).length,
-    });
-
-    // Only set errors if validation failed
     if (!validation.isValid) {
       setErrors(validation.errors);
 
-      // Show first critical error for step 1
       if (step === 1) {
         const criticalFields = [
           "startDate",
@@ -285,64 +272,37 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
 
         if (firstErrorKey) {
           const firstError = validation.errors[firstErrorKey];
-          console.log(`[VALIDATION] Showing error:`, firstError);
           setTimeout(() => alert(`Please fix: ${firstError}`), 100);
         }
       }
     } else {
-      // Clear errors if validation passed
       setErrors({});
     }
 
     return validation.isValid;
   };
 
-  // Navigation handlers
   const handleNext = () => {
-    console.log(
-      `[NAVIGATION] Attempting to move from step ${currentStep} to ${
-        currentStep + 1
-      }`
-    );
-
     const isValid = validateCurrentStep(currentStep);
-    console.log(`[NAVIGATION] Step ${currentStep} validation result:`, isValid);
 
     if (isValid && currentStep < 4) {
-      console.log(`[NAVIGATION] Moving to step ${currentStep + 1}`);
       setCurrentStep(currentStep + 1);
-      // Clear all errors when successfully moving to next step
       setErrors({});
-    } else if (!isValid) {
-      console.log("[NAVIGATION] Validation failed, staying on current step");
-      console.log("[NAVIGATION] Current errors:", errors);
     }
   };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      console.log(
-        `[NAVIGATION] Moving back from step ${currentStep} to ${
-          currentStep - 1
-        }`
-      );
       setCurrentStep(currentStep - 1);
-      // Clear errors when going back
       setErrors({});
     }
   };
 
-  // FIXED: Submit handler without camera-specific logic
   const handleSubmit = async () => {
-    console.log("Final submission attempt...");
-
-    // Final validation check
     if (!validateCurrentStep(4)) {
-      console.log("Final validation failed");
       return;
     }
 
-    // FIXED: Check for mandatory ID verification (all rentals)
     if (!formData.idSubmitted) {
       alert("Please complete ID verification before submitting your order.");
       return;
@@ -351,22 +311,18 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
     await submitHandler(setIsSubmitting);
   };
 
-  // Loading states
-  if (authLoading || loadingCustomerData) {
+  if (authLoading || loadingCustomerData || loadingBlockedDates) {
     return <CheckoutLoadingState />;
   }
 
-  // Authentication check
   if (!user) {
     return <CheckoutAuthRequired onGoToSignIn={() => navigate("/")} />;
   }
 
-  // Empty cart check
   if (rentalItems.length === 0) {
     return <CheckoutEmptyCart onGoToCart={() => navigate("/cartPage")} />;
   }
 
-  // Main render with PayPal provider
   return (
     <PayPalScriptProvider options={paypalInitialOptions}>
       <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden">
@@ -374,7 +330,6 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
         <CheckoutBackground />
 
         <div className="max-w-7xl mx-auto px-6 py-12 relative z-10">
-          {/* Header */}
           <CheckoutHeader
             isVisible={isVisible}
             userData={customerData}
@@ -382,12 +337,9 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
             rentalItems={rentalItems}
           />
 
-          {/* Step Indicator */}
           <CheckoutSteps currentStep={currentStep} />
 
-          {/* Main Content */}
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Form Section */}
             <CheckoutFormSection
               currentStep={currentStep}
               formData={formData}
@@ -407,14 +359,13 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
               onPayPalSuccess={handlePayPalSuccess}
               onPayPalError={handlePayPalError}
               rentalItems={rentalItems}
-              // FIXED: Remove hasCameraRental, keep form submission handler
               onGoogleFormSubmission={handleGoogleFormSubmission}
-              setFormData={setFormData} // ADD THIS
+              setFormData={setFormData}
               setErrors={setErrors}
               savedIdUrl={customerData?.idVerification?.documentUrl || ""}
+              blockedDates={blockedDates}
             />
 
-            {/* Order Summary Sidebar */}
             <div className="lg:col-span-1">
               <OrderSummary
                 rentalItems={rentalItems}
@@ -426,11 +377,11 @@ const Checkout = ({ userData = null, onOrderComplete = () => {} }) => {
                 total={total}
                 rentalDays={rentalDays}
                 formatCurrency={formatCurrency}
+                rentalCalculation={rentalCalculation}
               />
             </div>
           </div>
 
-          {/* Trust Indicators */}
           <CheckoutTrustIndicators />
         </div>
       </div>

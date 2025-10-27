@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { auth, firestore } from "../firebase"; // Adjust path as needed
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import { auth, firestore } from "../firebase";
 import {
   User,
   ArrowLeft,
@@ -51,6 +60,7 @@ const ProfilePage = () => {
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [customerId, setCustomerId] = useState(null);
   const navigate = useNavigate();
 
   const [user, setUser] = useState({
@@ -61,6 +71,9 @@ const ProfilePage = () => {
     isVerified: false,
     isPremium: false,
     provider: "",
+    phoneNumber: "",
+    address: null,
+    dateOfBirth: "",
     stats: {
       rentals: 0,
       reviews: 0,
@@ -69,43 +82,74 @@ const ProfilePage = () => {
     },
   });
 
-  // Load current user data
+  // Load current user data from both Firebase Auth and Firestore customers collection
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setCurrentUser(firebaseUser);
 
         try {
-          // Get user document from Firestore
-          const userRef = doc(firestore, "users", firebaseUser.uid);
-          const userDoc = await getDoc(userRef);
+          // First, try to find customer document by firebaseUid
+          const customersRef = collection(firestore, "customers");
+          const q = query(
+            customersRef,
+            where("firebaseUid", "==", firebaseUser.uid)
+          );
+          const querySnapshot = await getDocs(q);
 
-          let userData = {};
+          let customerData = null;
+          let foundCustomerId = null;
 
-          if (userDoc.exists()) {
-            userData = userDoc.data();
+          if (!querySnapshot.empty) {
+            // Customer document exists
+            const customerDoc = querySnapshot.docs[0];
+            customerData = customerDoc.data();
+            foundCustomerId = customerDoc.id;
+            setCustomerId(foundCustomerId);
+
+            console.log("✅ Customer data found:", customerData);
+            console.log("📊 Customer ID:", foundCustomerId);
           } else {
-            // If no Firestore document exists (shouldn't happen with your auth flow, but just in case)
-            userData = {
-              fullName: firebaseUser.displayName || "",
-              email: firebaseUser.email || "",
-              phoneNumber: firebaseUser.phoneNumber || "",
-              provider: firebaseUser.providerData[0]?.providerId?.includes(
-                "google"
-              )
-                ? "google"
-                : "email",
-              isEmailVerified: firebaseUser.emailVerified,
-              createdAt: new Date(),
-              role: "customer",
-            };
+            console.log("⚠️ No customer document found for this user");
+          }
 
-            // Create the document
-            await setDoc(userRef, {
-              ...userData,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
+          // Also fetch reviews count from reviews collection
+          let reviewsCount = 0;
+          try {
+            const reviewsQuery = query(
+              collection(firestore, "reviews"),
+              where("firebaseUid", "==", firebaseUser.uid)
+            );
+            const reviewsSnapshot = await getDocs(reviewsQuery);
+            reviewsCount = reviewsSnapshot.size;
+            console.log("📝 Reviews found:", reviewsCount);
+          } catch (reviewError) {
+            console.error("Error fetching reviews:", reviewError);
+          }
+
+          // Also fetch rentals count from checkouts collection
+          let rentalsCount = 0;
+          let completedRentalsCount = 0;
+          try {
+            const rentalsQuery = query(
+              collection(firestore, "checkouts"),
+              where("userId", "==", firebaseUser.uid)
+            );
+            const rentalsSnapshot = await getDocs(rentalsQuery);
+            rentalsCount = rentalsSnapshot.size;
+
+            // Count completed rentals
+            rentalsSnapshot.forEach((doc) => {
+              const rental = doc.data();
+              if (rental.status === "completed") {
+                completedRentalsCount++;
+              }
             });
+
+            console.log("🎬 Total rentals found:", rentalsCount);
+            console.log("✅ Completed rentals:", completedRentalsCount);
+          } catch (rentalError) {
+            console.error("Error fetching rentals:", rentalError);
           }
 
           // Determine user's sign-in provider
@@ -113,30 +157,53 @@ const ProfilePage = () => {
             (provider) => provider.providerId === "google.com"
           );
 
-          // Set user state with current user data
+          // Calculate average rating from reviews
+          let averageRating = "New";
+          if (reviewsCount > 0 && customerData?.averageRating) {
+            averageRating = `${customerData.averageRating.toFixed(1)}★`;
+          }
+
+          // Merge Firebase Auth data with Firestore customer data
           setUser({
-            name: userData.fullName || firebaseUser.displayName || "User",
+            name: customerData?.fullName || firebaseUser.displayName || "User",
             title:
-              userData.title ||
+              customerData?.title ||
               (isGoogleUser ? "Google User" : "Camera Enthusiast"),
-            email: userData.email || firebaseUser.email || "",
-            avatar: firebaseUser.photoURL || userData.profilePicture || null,
+            email: customerData?.email || firebaseUser.email || "",
+            avatar:
+              customerData?.profilePicture || firebaseUser.photoURL || null,
             isVerified:
-              firebaseUser.emailVerified || userData.isEmailVerified || false,
-            isPremium: userData.isPremium || false,
+              customerData?.idVerification?.verified ||
+              firebaseUser.emailVerified ||
+              false,
+            isPremium: customerData?.isPremium || false,
             provider: isGoogleUser ? "google" : "email",
             uid: firebaseUser.uid,
+            customerId: foundCustomerId,
+            phoneNumber:
+              customerData?.phoneNumber || customerData?.alternativePhone || "",
+            address: customerData?.address || null,
+            dateOfBirth: customerData?.dateOfBirth || "",
+            idVerification: customerData?.idVerification || null,
             stats: {
-              rentals: userData.totalRentals || 0,
-              reviews: userData.totalReviews || 0,
-              rating: userData.averageRating
-                ? `${userData.averageRating}★`
-                : "New",
-              saved: userData.savedItems?.length || 0,
+              rentals: completedRentalsCount || customerData?.totalRentals || 0,
+              reviews: reviewsCount || customerData?.totalReviews || 0,
+              rating: averageRating,
+              saved: customerData?.savedItems?.length || 0,
             },
           });
+
+          console.log("👤 Final user state:", {
+            name: customerData?.fullName || firebaseUser.displayName,
+            hasCustomerData: !!customerData,
+            hasAddress: !!customerData?.address,
+            hasPhone: !!customerData?.phoneNumber,
+            hasDateOfBirth: !!customerData?.dateOfBirth,
+            rentals: completedRentalsCount,
+            reviews: reviewsCount,
+          });
         } catch (error) {
-          console.error("Error loading user data:", error);
+          console.error("❌ Error loading user data:", error);
 
           // Fallback to Firebase Auth data only
           const isGoogleUser = firebaseUser.providerData.some(
@@ -152,6 +219,11 @@ const ProfilePage = () => {
             isPremium: false,
             provider: isGoogleUser ? "google" : "email",
             uid: firebaseUser.uid,
+            customerId: null,
+            phoneNumber: "",
+            address: null,
+            dateOfBirth: "",
+            idVerification: null,
             stats: {
               rentals: 0,
               reviews: 0,
@@ -176,7 +248,6 @@ const ProfilePage = () => {
   // Navigation handlers
   const handleNavigation = (path) => {
     console.log("Navigating to:", path);
-    // In your actual app, replace this with: navigate(path);
     navigate(path);
   };
 
@@ -191,9 +262,14 @@ const ProfilePage = () => {
   };
 
   const handleUploadPhoto = () => {
-    console.log("Opening photo upload dialog");
-    // You could implement photo upload to Firebase Storage here
-    // and update the user's profile picture
+    console.log("Navigating to account settings for photo upload");
+    // Navigate to account page where user can upload photo
+    navigate("/accountsPage");
+  };
+
+  const handleEditProfile = () => {
+    console.log("Navigating to account settings");
+    navigate("/accountsPage");
   };
 
   const handleLogout = () => {
@@ -208,7 +284,6 @@ const ProfilePage = () => {
       navigate("/");
     } catch (error) {
       console.error("Error signing out:", error);
-      // You might want to show an error toast here
     }
   };
 
@@ -221,7 +296,7 @@ const ProfilePage = () => {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mb-4 mx-auto"></div>
           <p className="text-gray-300">Loading your profile...</p>
         </div>
       </div>
@@ -320,8 +395,12 @@ const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Profile Header */}
-        <ProfileHeader user={user} onUploadPhoto={handleUploadPhoto} />
+        {/* Profile Header - Now with edit functionality */}
+        <ProfileHeader
+          user={user}
+          onUploadPhoto={handleUploadPhoto}
+          onEdit={handleEditProfile}
+        />
 
         {/* Quick Actions */}
         <div className="mt-8">
