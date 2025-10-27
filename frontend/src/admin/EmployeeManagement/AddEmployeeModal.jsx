@@ -5,31 +5,41 @@ import {
   Mail,
   Phone,
   Shield,
-  Save,
   RefreshCw,
   Eye,
   EyeOff,
+  Send,
+  CheckCircle,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import {
-  collection,
-  addDoc,
   getDocs,
+  collection,
   doc,
   updateDoc,
   increment,
   getDoc,
   setDoc,
 } from "firebase/firestore";
+import { initializeApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../../firebase";
 import { toast } from "react-hot-toast";
 import { createAuditLog } from "../../utils/auditLogger";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import {
+  sendEmployeeCredentials,
+  generateCompanyEmail,
+} from "../../services/emailService";
 
 const schema = yup.object({
-  email: yup.string().email("Invalid email").required("Email is required"),
+  email: yup
+    .string()
+    .email("Invalid email")
+    .required("Personal email is required"),
+  firstName: yup.string().required("First name is required"),
+  lastName: yup.string().required("Last name is required"),
   phone: yup.string(),
   roleId: yup.string().required("Role is required"),
   notes: yup.string(),
@@ -40,18 +50,33 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [companyEmail, setCompanyEmail] = useState("");
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
   } = useForm({
     resolver: yupResolver(schema),
     defaultValues: {
       status: "active",
     },
   });
+
+  // Watch first and last name to generate company email preview
+  const firstName = watch("firstName");
+  const lastName = watch("lastName");
+
+  useEffect(() => {
+    if (firstName && lastName) {
+      setCompanyEmail(generateCompanyEmail(firstName, lastName));
+    } else {
+      setCompanyEmail("");
+    }
+  }, [firstName, lastName]);
 
   useEffect(() => {
     if (isOpen) {
@@ -78,6 +103,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
       setRoles(rolesData);
     } catch (error) {
       console.error("Error fetching roles:", error);
+      toast.error("Failed to load roles");
     }
   };
 
@@ -126,22 +152,63 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
 
   const onSubmit = async (data) => {
     setLoading(true);
+    let secondaryApp = null;
+
     try {
-      // STEP 1: Create Firebase Auth account FIRST
+      // Generate company email
+      const generatedCompanyEmail = generateCompanyEmail(
+        data.firstName,
+        data.lastName
+      );
+
+      console.log(
+        "🔄 Creating employee with company email:",
+        generatedCompanyEmail
+      );
+
+      // STEP 1: Create a secondary Firebase app to avoid logging out the current admin
+      // Get the current app's config
+      const currentApp = auth.app;
+      const firebaseConfig = {
+        apiKey: currentApp.options.apiKey,
+        authDomain: currentApp.options.authDomain,
+        projectId: currentApp.options.projectId,
+        storageBucket: currentApp.options.storageBucket,
+        messagingSenderId: currentApp.options.messagingSenderId,
+        appId: currentApp.options.appId,
+      };
+
+      // Create a temporary secondary app for user creation
+      const secondaryAppName = `Secondary-${Date.now()}`;
+      secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+      const secondaryAuth = getAuth(secondaryApp);
+
+      // Create user with secondary auth (won't affect current session)
       const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        data.email.toLowerCase().trim(),
+        secondaryAuth,
+        generatedCompanyEmail,
         temporaryPassword
       );
       const firebaseUser = userCredential.user;
 
+      console.log("✅ Employee auth account created:", firebaseUser.uid);
+
       // STEP 2: Generate employee ID
       const employeeId = await generateEmployeeId();
 
+      // Get role name for email
+      const selectedRole = roles.find((role) => role.id === data.roleId);
+      const roleName = selectedRole ? selectedRole.name : "Employee";
+
       // STEP 3: Create employee document - USE FIREBASE UID AS DOCUMENT ID
       const employeeData = {
-        ...data,
-        email: data.email.toLowerCase().trim(),
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email.toLowerCase().trim(), // Personal Gmail for notifications
+        companyEmail: generatedCompanyEmail, // Company email for login
+        phone: data.phone || "",
+        roleId: data.roleId,
+        notes: data.notes || "",
         employeeId,
         firebaseUid: firebaseUser.uid,
         passwordChangeRequired: true,
@@ -153,43 +220,75 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
       const employeeRef = doc(db, "employees", firebaseUser.uid);
       await setDoc(employeeRef, employeeData);
 
-      // ✅ STEP 4: Create audit log
+      console.log("✅ Employee document created in Firestore");
+
+      // STEP 4: Send credential email
+      setSendingEmail(true);
+      console.log("✅ Employee document created with ID:", firebaseUser.uid);
+      console.log("📧 Attempting to send email with data:", {
+        to: employeeData.email,
+        companyEmail: generatedCompanyEmail,
+        employeeId: employeeId,
+      });
+
+      const emailResult = await sendEmployeeCredentials(
+        employeeData,
+        temporaryPassword,
+        roleName
+      );
+
+      if (!emailResult.success) {
+        toast.error(
+          "⚠️ Employee created but failed to send email. Please share credentials manually.",
+          { duration: 10000 }
+        );
+        console.error("❌ Email sending failed:", emailResult.error);
+      } else {
+        toast.success(`✅ Employee added! Credentials sent to ${data.email}`, {
+          duration: 8000,
+        });
+      }
+
+      // STEP 5: Create audit log
       await createAuditLog({
         action: "CREATE_EMPLOYEE",
         target: "employee",
         targetId: firebaseUser.uid,
         details: {
           employeeId,
-          email: data.email,
+          personalEmail: data.email,
+          companyEmail: generatedCompanyEmail,
           roleId: data.roleId,
         },
       });
 
-      // ✅ STEP 5: Show success message
-      toast.success(
-        `Employee added! Temporary password: ${temporaryPassword}`,
-        { duration: 10000 }
-      );
-
       console.log("=== EMPLOYEE CREATION SUCCESS ===");
       console.log("Firebase UID:", firebaseUser.uid);
       console.log("Employee ID:", employeeId);
-      console.log("Email:", data.email);
+      console.log("Personal Email:", data.email);
+      console.log("Company Email (Login):", generatedCompanyEmail);
       console.log("Temporary Password:", temporaryPassword);
+      console.log("Role:", roleName);
       console.log("================================");
 
+      // Reset form and close modal
       reset();
       setTemporaryPassword("");
+      setCompanyEmail("");
       onClose();
+
+      // Clean up secondary app
+      if (secondaryApp) {
+        await secondaryApp.delete();
+      }
     } catch (error) {
       console.error("❌ Error adding employee:", error);
 
-      // Handle specific Firebase Auth errors
       let errorMessage = "Failed to add employee";
 
       if (error.code === "auth/email-already-in-use") {
         errorMessage =
-          "This email is already registered. Each employee needs a unique email.";
+          "This company email is already in use. An employee with this name already exists.";
       } else if (error.code === "auth/invalid-email") {
         errorMessage = "Invalid email format.";
       } else if (error.code === "auth/weak-password") {
@@ -197,11 +296,23 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
       } else if (error.code === "permission-denied") {
         errorMessage =
           "Permission denied. Check Firestore security rules for employees collection.";
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
       }
 
       toast.error(errorMessage);
+
+      // Clean up secondary app on error
+      if (secondaryApp) {
+        try {
+          await secondaryApp.delete();
+        } catch (cleanupError) {
+          console.error("Error cleaning up secondary app:", cleanupError);
+        }
+      }
     } finally {
       setLoading(false);
+      setSendingEmail(false);
     }
   };
 
@@ -212,11 +323,8 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
   };
 
   if (!isOpen) {
-    console.log("AddEmployeeModal not rendering - isOpen is false");
     return null;
   }
-
-  console.log("AddEmployeeModal rendering with isOpen:", isOpen);
 
   return (
     <div
@@ -252,22 +360,80 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <User className="inline h-4 w-4 mr-1" />
+                  First Name *
+                </label>
+                <input
+                  {...register("firstName")}
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="John"
+                />
+                {errors.firstName && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {errors.firstName.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <User className="inline h-4 w-4 mr-1" />
+                  Last Name *
+                </label>
+                <input
+                  {...register("lastName")}
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Doe"
+                />
+                {errors.lastName && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {errors.lastName.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Company Email Preview */}
+            {companyEmail && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-green-900">
+                      Company Email (Login):
+                    </p>
+                    <p className="text-sm text-green-700 font-mono break-all">
+                      {companyEmail}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 <Mail className="inline h-4 w-4 mr-1" />
-                Email *
+                Personal Email * (Where credentials will be sent)
               </label>
               <input
                 {...register("email")}
                 type="email"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="employee@company.com"
+                placeholder="john.doe@gmail.com"
               />
               {errors.email && (
                 <p className="text-red-500 text-sm mt-1">
                   {errors.email.message}
                 </p>
               )}
+              <p className="text-xs text-gray-500 mt-1">
+                ℹ️ This is their personal email for receiving notifications
+              </p>
             </div>
 
             <div>
@@ -279,7 +445,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
                 {...register("phone")}
                 type="tel"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="+1 (555) 123-4567"
+                placeholder="+63 912 345 6789"
               />
             </div>
 
@@ -315,7 +481,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
                 <button
                   type="button"
                   onClick={generatePassword}
-                  className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900"
+                  className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 transition-colors"
                 >
                   <RefreshCw className="h-3 w-3 mr-1" />
                   Regenerate
@@ -341,8 +507,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
                 </button>
               </div>
               <p className="text-xs text-blue-700 mt-2">
-                ⚠️ Save this password! The employee will use this to login and
-                will be required to change it on first login.
+                📧 This password will be sent to their personal email
               </p>
             </div>
 
@@ -362,21 +527,27 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                disabled={loading || sendingEmail}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={loading}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading || sendingEmail}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                {loading || sendingEmail ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    {sendingEmail ? "Sending Email..." : "Adding..."}
+                  </>
                 ) : (
-                  <Save className="h-4 w-4 mr-2" />
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Add Employee & Send Email
+                  </>
                 )}
-                Add Employee
               </button>
             </div>
           </form>

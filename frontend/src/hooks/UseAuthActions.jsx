@@ -216,10 +216,9 @@ function UseAuthActions({
     }
   };
 
-  // Find employee by email
   const findEmployeeByEmail = async (email) => {
     try {
-      console.log("Searching for employee with email:", email);
+      console.log("Searching for employee with personal email:", email);
 
       const employeesRef = collection(firestore, "employees");
       const q = query(employeesRef, where("email", "==", email.toLowerCase()));
@@ -240,6 +239,33 @@ function UseAuthActions({
     }
   };
 
+  // FIXED: Find employee by COMPANY EMAIL (login email)
+  const findEmployeeByCompanyEmail = async (email) => {
+    try {
+      console.log("🔍 Searching for employee with COMPANY email:", email);
+
+      const employeesRef = collection(firestore, "employees");
+      const q = query(
+        employeesRef,
+        where("companyEmail", "==", email.toLowerCase())
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const employeeDoc = querySnapshot.docs[0];
+        const employeeData = { id: employeeDoc.id, ...employeeDoc.data() };
+        console.log("✅ Found employee:", employeeDoc.id);
+        return employeeData;
+      }
+
+      console.log("❌ No employee found with company email");
+      return null;
+    } catch (error) {
+      console.error("❌ Error finding employee:", error);
+      return null;
+    }
+  };
+
   // FIXED: Check user role and return user type with data
   const identifyUserRole = async (user) => {
     try {
@@ -254,8 +280,12 @@ function UseAuthActions({
       if (adminSnap.exists()) {
         console.log("✅ User is ADMIN");
 
-        // Check if admin is also an employee
-        const employeeData = await findEmployeeByEmail(user.email);
+        // Check if admin is also an employee using EITHER personal OR company email
+        let employeeData = await findEmployeeByEmail(user.email);
+        if (!employeeData) {
+          employeeData = await findEmployeeByCompanyEmail(user.email);
+        }
+
         if (employeeData) {
           console.log("✅ Admin is also an EMPLOYEE:", employeeData.employeeId);
           return {
@@ -274,8 +304,14 @@ function UseAuthActions({
         };
       }
 
-      // 2. Check if employee (ANY employee can access admin dashboard)
-      const employeeData = await findEmployeeByEmail(user.email);
+      // 2. Check if employee using COMPANY EMAIL (for login)
+      let employeeData = await findEmployeeByCompanyEmail(user.email);
+
+      // If not found by company email, try personal email
+      if (!employeeData) {
+        employeeData = await findEmployeeByEmail(user.email);
+      }
+
       if (employeeData) {
         console.log("✅ User is EMPLOYEE:", employeeData.employeeId);
 
@@ -788,7 +824,7 @@ function UseAuthActions({
     }
   };
 
-  // Main form submission - FIXED FOR EMPLOYEES
+  // UPDATED: Main form submission - FIXED FOR EMPLOYEE COMPANY EMAIL LOGIN
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -891,19 +927,19 @@ function UseAuthActions({
           }
         }
       } else {
-        // *** SIGN IN PROCESS - FIXED FOR EMPLOYEES ***
+        // *** SIGN IN PROCESS - FIXED FOR EMPLOYEE COMPANY EMAIL ***
         console.log("=== SIGN IN PROCESS STARTED ===");
-        console.log("Email:", formData.email.toLowerCase().trim());
+        const loginEmail = formData.email.toLowerCase().trim();
+        console.log("Login Email:", loginEmail);
 
-        // Check if it's an employee
-        const employeeData = await findEmployeeByEmail(
-          formData.email.toLowerCase().trim()
-        );
+        // ✅ STEP 1: Check if logging in with COMPANY EMAIL (employee login)
+        const employeeData = await findEmployeeByCompanyEmail(loginEmail);
 
         if (employeeData) {
-          console.log("=== EMPLOYEE LOGIN DETECTED ===");
+          console.log("=== EMPLOYEE LOGIN DETECTED (COMPANY EMAIL) ===");
           console.log("Employee ID:", employeeData.employeeId);
           console.log("Employee Status:", employeeData.status);
+          console.log("Company Email:", employeeData.companyEmail);
 
           // Check employee status
           if (employeeData.status !== "active") {
@@ -915,21 +951,20 @@ function UseAuthActions({
             return;
           }
 
-          // ✅ FIXED: For employees, ALWAYS use Firebase Authentication directly
-          // This ensures password changes work correctly
+          // ✅ Use company email for Firebase authentication
           try {
-            console.log("Attempting Firebase sign in for employee...");
+            console.log("Attempting Firebase sign in with company email...");
 
             const userCredential = await signInWithEmailAndPassword(
               auth,
-              formData.email.toLowerCase().trim(),
+              employeeData.companyEmail, // Use company email from database
               formData.password
             );
             const user = userCredential.user;
 
             console.log("✅ Employee Firebase sign in successful!");
 
-            // Update firebaseUid if not set
+            // Update firebaseUid if not set or mismatched
             if (
               !employeeData.firebaseUid ||
               employeeData.firebaseUid !== user.uid
@@ -989,12 +1024,10 @@ function UseAuthActions({
           }
         }
 
-        // Not an employee - proceed with regular customer login
+        // ✅ STEP 2: Not an employee - proceed with regular customer login
         console.log("Not an employee - proceeding with regular customer login");
 
-        const emailCheck = await checkEmailExists(
-          formData.email.toLowerCase().trim()
-        );
+        const emailCheck = await checkEmailExists(loginEmail);
 
         if (
           emailCheck.exists &&
@@ -1015,7 +1048,7 @@ function UseAuthActions({
 
         const userCredential = await signInWithEmailAndPassword(
           auth,
-          formData.email.toLowerCase().trim(),
+          loginEmail,
           formData.password
         );
         const user = userCredential.user;
