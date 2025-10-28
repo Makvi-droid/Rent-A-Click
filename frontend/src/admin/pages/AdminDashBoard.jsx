@@ -24,6 +24,8 @@ import Settings from "./Settings";
 import ContentManagement from "./ContentManagement";
 import AuditTrail from "./AuditTrail";
 import NotificationsTab from "./NotificationsTab";
+import RealtimeNotifications from "../Dashboard/RealtimeNotifications";
+import { NotificationsProvider } from "./NotificationsContext";
 
 const AdminDashboard = () => {
   const [user, loading, error] = useAuthState(auth);
@@ -197,33 +199,38 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar
-        isOpen={sidebarOpen}
-        setIsOpen={setSidebarOpen}
-        activeSection={activeSection}
-        setActiveSection={setActiveSection}
-      />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header
+    <NotificationsProvider>
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar
+          isOpen={sidebarOpen}
           setIsOpen={setSidebarOpen}
-          user={
-            userData || {
-              name: "User",
-              email: user.email,
-              role: "user",
-              avatar:
-                "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&h=256&q=80",
-            }
-          }
+          activeSection={activeSection}
+          setActiveSection={setActiveSection}
         />
 
-        <main className="flex-1 overflow-auto p-6">
-          <div className="max-w-7xl mx-auto">{renderContent()}</div>
-        </main>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Real-time notifications bell - always visible */}
+          <RealtimeNotifications />
+
+          <Header
+            setIsOpen={setSidebarOpen}
+            user={
+              userData || {
+                name: "User",
+                email: user.email,
+                role: "user",
+                avatar:
+                  "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&h=256&q=80",
+              }
+            }
+          />
+
+          <main className="flex-1 overflow-auto p-6">
+            <div className="max-w-7xl mx-auto">{renderContent()}</div>
+          </main>
+        </div>
       </div>
-    </div>
+    </NotificationsProvider>
   );
 };
 

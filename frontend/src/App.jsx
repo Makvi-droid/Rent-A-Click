@@ -24,9 +24,7 @@ import Help from "./pages/Help";
 import AccountPage from "./pages/AccountPage";
 import NotificationPage from "./pages/NotificationPage";
 import HelpSupportPage from "./pages/HelpSupportPage";
-import NottificationsProvider, {
-  NotificationsProvider,
-} from "./admin/pages/NotificationsContext";
+import { NotificationsProvider } from "./admin/pages/NotificationsContext";
 
 function App() {
   return (

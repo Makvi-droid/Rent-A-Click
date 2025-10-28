@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { auth, db } from "../../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { auth } from "../../firebase";
 
-// Import new real-time components
+// Import components
 import RealtimeStats from "../Dashboard/RealtimeStats";
 import RealtimeActivity from "../Dashboard/RealtimeActivity";
 import RealtimeCharts from "../Dashboard/RealtimeCharts";
 import RealtimeNotifications from "../Dashboard/RealtimeNotifications";
 import NotificationsTab from "./NotificationsTab";
+import { NotificationsProvider } from "./NotificationsContext";
 
 const Dashboard = () => {
   const [user, loading, error] = useAuthState(auth);
@@ -65,16 +65,44 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex">
-        <div className="flex-1">
-          {/* Real-time notifications */}
-          <RealtimeNotifications />
+    <NotificationsProvider>
+      <div className="min-h-screen bg-gray-50">
+        <div className="flex">
+          <div className="flex-1">
+            {/* Real-time notifications bell */}
+            <RealtimeNotifications />
 
-          <main className="p-6">{renderActiveComponent()}</main>
+            {/* Navigation Tabs */}
+            <div className="bg-white border-b border-gray-200 px-6">
+              <div className="flex space-x-8">
+                <button
+                  onClick={() => setActiveTab("overview")}
+                  className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === "overview"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  Overview
+                </button>
+                <button
+                  onClick={() => setActiveTab("notifications")}
+                  className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === "notifications"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  Notifications
+                </button>
+              </div>
+            </div>
+
+            <main className="p-6">{renderActiveComponent()}</main>
+          </div>
         </div>
       </div>
-    </div>
+    </NotificationsProvider>
   );
 };
 

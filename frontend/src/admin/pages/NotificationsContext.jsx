@@ -6,15 +6,14 @@ import React, {
   useRef,
 } from "react";
 import {
-  Bell,
-  X,
   AlertTriangle,
   CheckCircle,
   ShoppingCart,
   Users,
+  X,
 } from "lucide-react";
 
-// NotificationsContext
+// Create context for sharing notifications
 const NotificationsContext = createContext();
 
 export const useNotifications = () => {
@@ -29,7 +28,7 @@ export const useNotifications = () => {
 
 export const NotificationsProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const isInitialLoad = useRef({
     products: true,
@@ -44,18 +43,16 @@ export const NotificationsProvider = ({ children }) => {
   });
 
   useEffect(() => {
-    let unsubscribes = [];
-
     const initializeFirebase = async () => {
       try {
-        // Dynamic import to handle Firebase
-        const firebaseModule = await import("../../firebase");
-        const db = firebaseModule.db;
+        const { db } = await import("../../firebase");
         const { collection, onSnapshot, query, orderBy } = await import(
           "firebase/firestore"
         );
 
-        // Monitor products for stock changes
+        const unsubscribes = [];
+
+        // Monitor low stock products
         const productsUnsubscribe = onSnapshot(
           collection(db, "products"),
           (snapshot) => {
@@ -64,7 +61,6 @@ export const NotificationsProvider = ({ children }) => {
                 existingDocs.current.products.add(doc.id);
               });
               isInitialLoad.current.products = false;
-              setIsLoading(false);
               return;
             }
 
@@ -79,7 +75,7 @@ export const NotificationsProvider = ({ children }) => {
                     title: "Low Stock Alert",
                     message: `${data.name} is running low (${data.stock} remaining)`,
                     timestamp: new Date(),
-                    icon: "AlertTriangle",
+                    icon: AlertTriangle,
                     color: "text-yellow-600",
                     bgColor: "bg-yellow-50",
                     borderColor: "border-l-yellow-500",
@@ -92,7 +88,7 @@ export const NotificationsProvider = ({ children }) => {
                     title: "Out of Stock",
                     message: `${data.name} is now out of stock`,
                     timestamp: new Date(),
-                    icon: "AlertTriangle",
+                    icon: AlertTriangle,
                     color: "text-red-600",
                     bgColor: "bg-red-50",
                     borderColor: "border-l-red-500",
@@ -104,7 +100,7 @@ export const NotificationsProvider = ({ children }) => {
           }
         );
 
-        // Monitor checkouts for new orders
+        // Monitor new orders
         const checkoutsUnsubscribe = onSnapshot(
           query(collection(db, "checkouts"), orderBy("createdAt", "desc")),
           (snapshot) => {
@@ -125,35 +121,98 @@ export const NotificationsProvider = ({ children }) => {
               ) {
                 existingDocs.current.checkouts.add(change.doc.id);
 
+                // Log the data to help debug
+                console.log("New checkout data:", data);
+
+                // Access the nested pricing object for the total
+                let amount = 0;
+                if (data.pricing?.total) {
+                  amount = data.pricing.total;
+                } else if (data.total !== undefined) {
+                  amount = data.total;
+                } else if (data.amount !== undefined) {
+                  amount = data.amount;
+                } else if (data.grandTotal !== undefined) {
+                  amount = data.grandTotal;
+                } else if (data.totalAmount !== undefined) {
+                  amount = data.totalAmount;
+                } else if (data.totalPrice !== undefined) {
+                  amount = data.totalPrice;
+                } else if (data.items && Array.isArray(data.items)) {
+                  // Calculate total from items if available
+                  amount = data.items.reduce((sum, item) => {
+                    const price =
+                      item.price || item.totalPrice || item.totalItemCost || 0;
+                    return sum + price; // totalItemCost already includes quantity
+                  }, 0);
+                }
+
+                // Access nested customerInfo for better customer identification
+                const customerEmail =
+                  data.customerInfo?.email ||
+                  data.customerInfo?.fullName ||
+                  data.userEmail ||
+                  data.email ||
+                  data.customerEmail ||
+                  data.userName ||
+                  "Customer";
+
                 addNotification({
                   id: `new-order-${change.doc.id}`,
                   type: "order",
-                  title: "New Order Received",
-                  message: `Order #${change.doc.id.slice(-6)} from ${
-                    data.userEmail || "Customer"
-                  } - ₱${data.amount?.toFixed(2) || "0.00"}`,
+                  title: "🛒 New Order Received!",
+                  message: `Order #${(data.orderNumber || change.doc.id).slice(
+                    -6
+                  )} from ${customerEmail}${
+                    amount > 0 ? ` - ₱${amount.toFixed(2)}` : ""
+                  }`,
                   timestamp: new Date(),
-                  icon: "ShoppingCart",
+                  icon: ShoppingCart,
                   color: "text-green-600",
                   bgColor: "bg-green-50",
                   borderColor: "border-l-green-500",
                   read: false,
                 });
-
-                playNotificationSound();
               }
 
               if (change.type === "modified") {
+                // Log the modified data to help debug
+                console.log("Modified checkout data:", data);
+
+                // Access the nested pricing object for the total
+                let amount = 0;
+                if (data.pricing?.total) {
+                  amount = data.pricing.total;
+                } else if (data.total !== undefined) {
+                  amount = data.total;
+                } else if (data.amount !== undefined) {
+                  amount = data.amount;
+                } else if (data.grandTotal !== undefined) {
+                  amount = data.grandTotal;
+                } else if (data.totalAmount !== undefined) {
+                  amount = data.totalAmount;
+                } else if (data.totalPrice !== undefined) {
+                  amount = data.totalPrice;
+                } else if (data.items && Array.isArray(data.items)) {
+                  amount = data.items.reduce((sum, item) => {
+                    const price =
+                      item.price || item.totalPrice || item.totalItemCost || 0;
+                    return sum + price;
+                  }, 0);
+                }
+
                 if (data.status === "completed") {
                   addNotification({
                     id: `order-completed-${change.doc.id}-${Date.now()}`,
                     type: "success",
                     title: "Order Completed",
-                    message: `Order #${change.doc.id.slice(
-                      -6
-                    )} has been completed - ₱${data.amount?.toFixed(2)}`,
+                    message: `Order #${(
+                      data.orderNumber || change.doc.id
+                    ).slice(-6)} has been completed${
+                      amount > 0 ? ` - ₱${amount.toFixed(2)}` : ""
+                    }`,
                     timestamp: new Date(),
-                    icon: "CheckCircle",
+                    icon: CheckCircle,
                     color: "text-green-600",
                     bgColor: "bg-green-50",
                     borderColor: "border-l-green-500",
@@ -164,11 +223,11 @@ export const NotificationsProvider = ({ children }) => {
                     id: `order-cancelled-${change.doc.id}-${Date.now()}`,
                     type: "error",
                     title: "Order Cancelled",
-                    message: `Order #${change.doc.id.slice(
-                      -6
-                    )} has been cancelled`,
+                    message: `Order #${(
+                      data.orderNumber || change.doc.id
+                    ).slice(-6)} has been cancelled`,
                     timestamp: new Date(),
-                    icon: "X",
+                    icon: X,
                     color: "text-red-600",
                     bgColor: "bg-red-50",
                     borderColor: "border-l-red-500",
@@ -180,7 +239,7 @@ export const NotificationsProvider = ({ children }) => {
           }
         );
 
-        // Monitor users for new registrations
+        // Monitor new user registrations
         const usersUnsubscribe = onSnapshot(
           collection(db, "users"),
           (snapshot) => {
@@ -208,7 +267,7 @@ export const NotificationsProvider = ({ children }) => {
                     data.name || data.email || "New user"
                   } has registered`,
                   timestamp: new Date(),
-                  icon: "Users",
+                  icon: Users,
                   color: "text-blue-600",
                   bgColor: "bg-blue-50",
                   borderColor: "border-l-blue-500",
@@ -219,21 +278,23 @@ export const NotificationsProvider = ({ children }) => {
           }
         );
 
-        unsubscribes = [
+        unsubscribes.push(
           productsUnsubscribe,
           checkoutsUnsubscribe,
-          usersUnsubscribe,
-        ];
+          usersUnsubscribe
+        );
+
+        return () => {
+          unsubscribes.forEach((unsubscribe) => unsubscribe());
+        };
       } catch (error) {
         console.error("Error initializing notifications:", error);
-        setIsLoading(false);
       }
     };
 
-    initializeFirebase();
-
+    const cleanup = initializeFirebase();
     return () => {
-      unsubscribes.forEach((unsubscribe) => unsubscribe && unsubscribe());
+      cleanup.then((cleanupFn) => cleanupFn && cleanupFn());
     };
   }, []);
 
@@ -241,8 +302,23 @@ export const NotificationsProvider = ({ children }) => {
     setNotifications((prev) => {
       const exists = prev.find((n) => n.id === notification.id);
       if (exists) return prev;
-      return [notification, ...prev];
+
+      const newNotifications = [notification, ...prev];
+      return newNotifications;
     });
+
+    setUnreadCount((prev) => prev + 1);
+
+    // Play notification sound
+    try {
+      const audio = new Audio(
+        "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHmq+8OScTgwOUKzn77BiFglCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwO"
+      );
+      audio.volume = 0.3;
+      audio.play().catch(() => {});
+    } catch (e) {
+      // Silent fail
+    }
   };
 
   const removeNotification = (notificationId) => {
@@ -251,171 +327,39 @@ export const NotificationsProvider = ({ children }) => {
 
   const markAsRead = (notificationId) => {
     setNotifications((prev) =>
-      prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+      prev.map((n) => {
+        if (n.id === notificationId && !n.read) {
+          setUnreadCount((count) => Math.max(0, count - 1));
+          return { ...n, read: true };
+        }
+        return n;
+      })
     );
   };
 
   const markAllAsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadCount(0);
   };
 
   const clearAllNotifications = () => {
     setNotifications([]);
-  };
-
-  const playNotificationSound = () => {
-    try {
-      const audio = new Audio(
-        "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHmq+8OScTgwOUKzn77BiFglCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwOUKzn77BiFQlCmNzyvWMcBjiP1vLMeS0GI3fH8N2RQAoUXbTp66hVFApGnt/yvmwhBTGH0fPTgjQGHWq+8OWcTgwO"
-      );
-      audio.volume = 0.3;
-      audio.play().catch(() => {});
-    } catch (e) {}
-  };
-
-  const getUnreadCount = () => {
-    return notifications.filter((n) => !n.read).length;
-  };
-
-  const getFilterCount = (type) => {
-    if (type === "all") return notifications.length;
-    return notifications.filter((n) => n.type === type).length;
+    setUnreadCount(0);
   };
 
   const value = {
     notifications,
-    isLoading,
+    unreadCount,
     addNotification,
     removeNotification,
     markAsRead,
     markAllAsRead,
     clearAllNotifications,
-    getUnreadCount,
-    getFilterCount,
   };
 
   return (
     <NotificationsContext.Provider value={value}>
       {children}
     </NotificationsContext.Provider>
-  );
-};
-
-// Bell Icon Component (for Header or anywhere)
-export const NotificationBell = () => {
-  const { notifications, getUnreadCount, markAllAsRead } = useNotifications();
-  const [showDropdown, setShowDropdown] = useState(false);
-  const unreadCount = getUnreadCount();
-
-  const formatTimestamp = (timestamp) => {
-    const now = new Date();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-
-    if (minutes < 1) return "Just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  };
-
-  const iconMap = {
-    AlertTriangle: AlertTriangle,
-    CheckCircle: CheckCircle,
-    ShoppingCart: ShoppingCart,
-    Users: Users,
-    X: X,
-  };
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => {
-          setShowDropdown(!showDropdown);
-          if (!showDropdown) markAllAsRead();
-        }}
-        className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
-      >
-        <Bell className="h-6 w-6 text-gray-600" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
-        )}
-      </button>
-
-      {showDropdown && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowDropdown(false)}
-          />
-          <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 max-h-96 overflow-hidden">
-            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Notifications
-                  {notifications.length > 0 && (
-                    <span className="ml-2 text-sm font-normal text-gray-500">
-                      ({notifications.length})
-                    </span>
-                  )}
-                </h3>
-                <button
-                  onClick={() => setShowDropdown(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="max-h-80 overflow-y-auto">
-              {notifications.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  <Bell className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <p className="font-medium">No notifications</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    You're all caught up!
-                  </p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100">
-                  {notifications.slice(0, 10).map((notification) => {
-                    const IconComponent = iconMap[notification.icon] || Bell;
-                    return (
-                      <div
-                        key={notification.id}
-                        className={`p-4 hover:bg-gray-50 transition-colors ${notification.bgColor} border-l-4 ${notification.borderColor}`}
-                      >
-                        <div className="flex items-start space-x-3">
-                          <div
-                            className={`${notification.color} mt-0.5 flex-shrink-0`}
-                          >
-                            <IconComponent className="h-5 w-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">
-                              {notification.title}
-                            </p>
-                            <p className="text-sm text-gray-600 mt-1">
-                              {notification.message}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-2">
-                              {formatTimestamp(notification.timestamp)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
   );
 };

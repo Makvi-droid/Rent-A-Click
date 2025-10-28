@@ -48,30 +48,51 @@ const PersonalInformation = ({ data, onChange }) => {
               firstName,
               lastName,
             });
+
+            // Initialize parent form data if not already set
+            if (onChange && !data?.firstName) {
+              onChange("firstName", firstName);
+              onChange("lastName", lastName);
+            }
           } else {
             // No customer document yet - fallback to Firebase Auth data
             const fullName = firebaseUser.displayName || "";
             const nameParts = fullName.trim().split(" ");
+            const firstName = nameParts[0] || "";
+            const lastName = nameParts.slice(1).join(" ") || "";
 
             setUserInfo({
               fullName,
               email: firebaseUser.email || "",
-              firstName: nameParts[0] || "",
-              lastName: nameParts.slice(1).join(" ") || "",
+              firstName,
+              lastName,
             });
+
+            // Initialize parent form data
+            if (onChange) {
+              onChange("firstName", firstName);
+              onChange("lastName", lastName);
+            }
           }
         } catch (error) {
           console.error("Error loading customer data:", error);
           // Fallback to Firebase Auth data
           const fullName = firebaseUser.displayName || "";
           const nameParts = fullName.trim().split(" ");
+          const firstName = nameParts[0] || "";
+          const lastName = nameParts.slice(1).join(" ") || "";
 
           setUserInfo({
             fullName,
             email: firebaseUser.email || "",
-            firstName: nameParts[0] || "",
-            lastName: nameParts.slice(1).join(" ") || "",
+            firstName,
+            lastName,
           });
+
+          if (onChange) {
+            onChange("firstName", firstName);
+            onChange("lastName", lastName);
+          }
         }
       }
       setIsLoading(false);
@@ -108,48 +129,44 @@ const PersonalInformation = ({ data, onChange }) => {
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* First Name - Read Only */}
+        {/* First Name - Now Editable */}
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
             <User className="w-4 h-4 text-gray-400" />
             First Name *
-            <Lock className="w-3 h-3 text-gray-500" />
           </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={userInfo.firstName}
-              readOnly
-              className="w-full px-4 py-3 bg-gray-800/30 border border-gray-600/50 rounded-xl
-                       text-gray-300 backdrop-blur-sm cursor-not-allowed
-                       focus:outline-none focus:ring-2 focus:ring-gray-600/50"
-              placeholder="First name from account"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-gray-500/5 to-gray-400/5 rounded-xl pointer-events-none" />
-          </div>
-          <p className="text-xs text-gray-500 mt-1">Synced from your account</p>
+          <input
+            type="text"
+            value={data?.firstName || ""}
+            onChange={(e) => onChange && onChange("firstName", e.target.value)}
+            className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl
+                     focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50
+                     text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300"
+            placeholder="Enter your first name"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Enter your legal first name
+          </p>
         </div>
 
-        {/* Last Name - Read Only */}
+        {/* Last Name - Now Editable */}
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
             <User className="w-4 h-4 text-gray-400" />
             Last Name *
-            <Lock className="w-3 h-3 text-gray-500" />
           </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={userInfo.lastName}
-              readOnly
-              className="w-full px-4 py-3 bg-gray-800/30 border border-gray-600/50 rounded-xl
-                       text-gray-300 backdrop-blur-sm cursor-not-allowed
-                       focus:outline-none focus:ring-2 focus:ring-gray-600/50"
-              placeholder="Last name from account"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-gray-500/5 to-gray-400/5 rounded-xl pointer-events-none" />
-          </div>
-          <p className="text-xs text-gray-500 mt-1">Synced from your account</p>
+          <input
+            type="text"
+            value={data?.lastName || ""}
+            onChange={(e) => onChange && onChange("lastName", e.target.value)}
+            className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl
+                     focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50
+                     text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300"
+            placeholder="Enter your last name"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Enter your legal last name
+          </p>
         </div>
 
         {/* Email Address - Read Only */}
@@ -188,7 +205,7 @@ const PersonalInformation = ({ data, onChange }) => {
             onChange={(e) =>
               onChange && onChange("dateOfBirth", e.target.value)
             }
-            max={new Date().toISOString().split("T")[0]} // Prevent future dates
+            max={new Date().toISOString().split("T")[0]}
             className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl
                      focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50
                      text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300
@@ -211,10 +228,9 @@ const PersonalInformation = ({ data, onChange }) => {
               Account Information
             </h4>
             <p className="text-xs text-blue-200/80 leading-relaxed">
-              Your name and email are automatically synced from the customers
-              collection. To update this information, please contact our support
-              team as these fields are protected for security and verification
-              purposes.
+              Your email is synced from your account and protected for security.
+              You can edit your name fields to ensure your legal name is
+              accurate for verification purposes.
             </p>
           </div>
         </div>

@@ -232,17 +232,32 @@ function AvailabilitySettings() {
     }
   };
 
+  const formatDateDisplay = (dateKey) => {
+    const [year, month, day] = dateKey.split("-");
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   const renderBlackoutItem = (blackout) => {
     let displayText = "";
+    let datesList = [];
 
     if (blackout.type === "full_day") {
       displayText = `Full Day - ${blackout.dates?.length || 0} date(s)`;
+      datesList = blackout.dates || [];
     } else if (blackout.type === "time_slots") {
       displayText = `Time Slots - ${blackout.dates?.length || 0} date(s), ${
         blackout.blockedSlots?.length || 0
       } slot(s)`;
+      datesList = blackout.dates || [];
     } else if (blackout.type === "date_range") {
-      displayText = `Range: ${blackout.startDate} to ${blackout.endDate}`;
+      displayText = `Range: ${formatDateDisplay(
+        blackout.startDate
+      )} to ${formatDateDisplay(blackout.endDate)}`;
     } else if (blackout.type === "recurring") {
       displayText = `Every ${DAYS_OF_WEEK[blackout.recurringDay]}`;
     }
@@ -271,6 +286,26 @@ function AvailabilitySettings() {
             </div>
             <p className="text-white font-medium mb-1">{displayText}</p>
             <p className="text-gray-400 text-sm mb-2">{blackout.reason}</p>
+
+            {/* Display selected dates for full_day and time_slots */}
+            {(blackout.type === "full_day" || blackout.type === "time_slots") &&
+              datesList.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2 mb-2">
+                  {datesList.slice(0, 5).map((dateKey) => (
+                    <span
+                      key={dateKey}
+                      className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300"
+                    >
+                      {formatDateDisplay(dateKey)}
+                    </span>
+                  ))}
+                  {datesList.length > 5 && (
+                    <span className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-400">
+                      +{datesList.length - 5} more
+                    </span>
+                  )}
+                </div>
+              )}
 
             {blackout.type === "time_slots" && blackout.blockedSlots && (
               <div className="flex flex-wrap gap-1 mt-2">
