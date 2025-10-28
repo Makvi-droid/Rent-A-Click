@@ -11,13 +11,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-} from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
 
 export default function Promotion() {
@@ -39,11 +33,11 @@ export default function Promotion() {
   }, []);
 
   useEffect(() => {
-    // Simplified query - just get all promotions and filter client-side
-    const q = query(collection(db, "promotions"));
+    // Get all promotions without any query constraints to avoid index issues
+    const promotionsRef = collection(db, "promotions");
 
     const unsubscribe = onSnapshot(
-      q,
+      promotionsRef,
       (snapshot) => {
         const promos = snapshot.docs.map((doc) => ({
           id: doc.id,
