@@ -11,7 +11,6 @@ import {
 } from "firebase/firestore";
 import Dashboard from "./Dashboard";
 import ProductManagement from "../../components/admin/ProductManagement";
-import ComingSoon from "../../components/admin/ComingSoon";
 import Sidebar from "../../components/admin/Sidebar";
 import Header from "../../components/admin/Header";
 import Inventory from "./Inventory";
@@ -24,7 +23,6 @@ import Settings from "./Settings";
 import ContentManagement from "./ContentManagement";
 import AuditTrail from "./AuditTrail";
 import NotificationsTab from "./NotificationsTab";
-import RealtimeNotifications from "../Dashboard/RealtimeNotifications";
 import { NotificationsProvider } from "./NotificationsContext";
 
 const AdminDashboard = () => {
@@ -209,9 +207,7 @@ const AdminDashboard = () => {
         />
 
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Real-time notifications bell - always visible */}
-          <RealtimeNotifications />
-
+          {/* Header with consolidated notifications */}
           <Header
             setIsOpen={setSidebarOpen}
             user={

@@ -11,6 +11,7 @@ import {
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  signOut,
 } from "firebase/auth";
 
 import { auth, firestore } from "../firebase";
@@ -456,6 +457,26 @@ function UseAuthActions({
       console.log("Is new user:", isNewUser);
       console.log("================================");
 
+      // ✅ NEW: CHECK FOR SUSPENDED CUSTOMER ACCOUNT FIRST
+      if (userRole.type === "customer") {
+        const accountStatus = userRole.data.accountStatus || "active";
+
+        if (accountStatus === "suspended") {
+          console.log("❌ Customer account is SUSPENDED");
+
+          // Sign out the user immediately
+          await signOut(auth);
+
+          showError(
+            "Your account has been suspended. Please contact support for assistance.",
+            8000
+          );
+
+          setIsLoading(false);
+          return; // Stop the authentication process
+        }
+      }
+
       // ✅ Employees and Admins ALWAYS require custom 2FA (regardless of provider)
       if (userRole.type === "employee" || userRole.type === "admin") {
         console.log("🔐 Custom 2FA REQUIRED for Employee/Admin:", user.email);
@@ -690,7 +711,6 @@ function UseAuthActions({
     }
   };
 
-  // Google SSO
   const handleGoogleSSO = async () => {
     if (isLoading) return;
 
@@ -729,6 +749,26 @@ function UseAuthActions({
           "google"
         );
       } else {
+        // ✅ NEW: CHECK IF CUSTOMER IS SUSPENDED (for existing users)
+        if (userRole.type === "customer") {
+          const accountStatus = userRole.data.accountStatus || "active";
+
+          if (accountStatus === "suspended") {
+            console.log("❌ Google SSO: Customer account is SUSPENDED");
+
+            // Sign out the user immediately
+            await signOut(auth);
+
+            showError(
+              "Your account has been suspended. Please contact support for assistance.",
+              8000
+            );
+
+            setIsLoading(false);
+            return; // Stop the authentication process
+          }
+        }
+
         console.log(`Existing ${userRole.type} found`);
         await handlePostAuthentication(user, userRole, false, "google");
       }

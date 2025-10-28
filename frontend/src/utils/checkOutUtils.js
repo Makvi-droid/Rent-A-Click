@@ -1,4 +1,4 @@
-// Enhanced checkoutUtils.js - Excludes blocked dates from rental calculations
+// Enhanced checkoutUtils.js - FIXED: Better image URL handling
 import {
   collection,
   addDoc,
@@ -29,6 +29,22 @@ export const getDailyRate = (item) => {
   if (item.variant?.price) return parseFloat(item.variant.price);
   if (item.price) return parseFloat(item.price);
   return 0;
+};
+
+// FIXED: Helper to get image URL from item (checks multiple possible fields)
+const getItemImageUrl = (item) => {
+  // Check all possible image field variations
+  if (item.imageUrl) return item.imageUrl;
+  if (item.image) return item.image;
+  if (item.variant?.imageUrl) return item.variant.imageUrl;
+  if (item.variant?.image) return item.variant.image;
+  if (item.productImage) return item.productImage;
+  if (item.images && Array.isArray(item.images) && item.images.length > 0) {
+    return item.images[0];
+  }
+
+  console.warn(`⚠️ No image found for item: ${item.name || item.id}`);
+  return null;
 };
 
 // NEW: Fetch blocked dates from Firebase
@@ -333,7 +349,7 @@ const formatTimeTo12Hour = (time24) => {
   }
 };
 
-// Enhanced saveCheckoutToFirebase function
+// FIXED: Enhanced saveCheckoutToFirebase function with better image handling
 export const saveCheckoutToFirebase = async (
   checkoutId,
   formData,
@@ -424,18 +440,40 @@ export const saveCheckoutToFirebase = async (
             : null,
       },
 
-      items: rentalItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity || 1,
-        dailyRate: getDailyRate(item),
-        totalItemCost:
-          getDailyRate(item) * (item.quantity || 1) * pricing.rentalDays,
-        variant: item.variant || null,
-        image: item.image || null,
-        category: item.category || null,
-        brand: item.brand || null,
-      })),
+      // FIXED: Enhanced items mapping with comprehensive image URL handling
+      items: rentalItems.map((item) => {
+        const imageUrl = getItemImageUrl(item);
+
+        // Log for debugging
+        if (!imageUrl) {
+          console.warn(
+            `⚠️ Item "${item.name}" (ID: ${item.id}) has no image URL`
+          );
+        } else {
+          console.log(`✅ Item "${item.name}" image URL: ${imageUrl}`);
+        }
+
+        return {
+          id: item.id,
+          name: item.name,
+          brand: item.brand || null,
+          category: item.category || null,
+          subCategory: item.subCategory || null,
+          quantity: item.quantity || 1,
+          dailyRate: getDailyRate(item),
+          totalItemCost:
+            getDailyRate(item) * (item.quantity || 1) * pricing.rentalDays,
+          variant: item.variant || null,
+          // Store image in BOTH fields for maximum compatibility
+          image: imageUrl,
+          imageUrl: imageUrl,
+          // Keep original data for reference
+          originalItem: {
+            productId: item.productId || item.id,
+            inventoryId: item.inventoryId || null,
+          },
+        };
+      }),
 
       pricing: {
         subtotal: Number(pricing.subtotal.toFixed(2)),
@@ -480,7 +518,7 @@ export const saveCheckoutToFirebase = async (
           0
         ),
         collectionVersion: "customers-v1",
-        checkoutVersion: "2.2",
+        checkoutVersion: "2.3", // Updated version
         customerProfileExists: !!customerDocId,
         autoCreatedProfile: shouldCreateCustomerProfile,
       },
@@ -489,6 +527,14 @@ export const saveCheckoutToFirebase = async (
     await setDoc(doc(db, "checkouts", checkoutId), checkoutData);
 
     console.log("✅ Checkout saved successfully:", checkoutId);
+    console.log(
+      "📦 Items with images:",
+      checkoutData.items.map((i) => ({
+        name: i.name,
+        hasImage: !!i.imageUrl,
+      }))
+    );
+
     return checkoutData;
   } catch (error) {
     console.error("❌ Error saving checkout to Firebase:", error);

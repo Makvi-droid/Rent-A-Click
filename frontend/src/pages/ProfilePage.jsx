@@ -429,28 +429,12 @@ const ProfilePage = () => {
             />
 
             <NavigationCard
-              title="Security & Privacy"
-              description="Manage passwords, 2FA, and privacy settings"
-              icon={Shield}
-              onClick={() => handleNavigation("/security")}
-              color="blue"
-            />
-
-            <NavigationCard
               title="Notifications"
               description="Configure email and push notification preferences"
               icon={Bell}
               onClick={() => handleNavigation("/notificationPage")}
               color="green"
               badge=""
-            />
-
-            <NavigationCard
-              title="Billing & Payments"
-              description="View payment methods, invoices, and subscription"
-              icon={CreditCard}
-              onClick={() => handleNavigation("/billing")}
-              color="yellow"
             />
 
             <NavigationCard
@@ -462,10 +446,7 @@ const ProfilePage = () => {
             />
           </div>
 
-          {/* Activity Feed */}
           <div>
-            <ActivityFeed />
-
             {/* Logout */}
             <div className="mt-6">
               <button

@@ -3,20 +3,17 @@ import { useNavigate } from "react-router-dom";
 import {
   Menu,
   Bell,
-  Settings,
-  LogOut,
   User,
   Shield,
   Briefcase,
   Package,
   DollarSign,
   Truck,
+  Calendar,
   Clock,
   AlertTriangle,
   CheckCircle,
   Info,
-  Calendar,
-  Activity,
 } from "lucide-react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import {
@@ -31,7 +28,7 @@ import {
   limit,
   updateDoc,
 } from "firebase/firestore";
-import { auth, db } from "../../firebase"; // Import directly from firebase config
+import { auth, db } from "../../firebase";
 
 const Header = ({ setIsOpen }) => {
   const navigate = useNavigate();
@@ -197,7 +194,7 @@ const Header = ({ setIsOpen }) => {
         notificationsRef,
         where("userId", "==", user.uid),
         orderBy("createdAt", "desc"),
-        limit(10)
+        limit(20)
       );
 
       const unsubscribe = onSnapshot(
@@ -259,7 +256,7 @@ const Header = ({ setIsOpen }) => {
     if (!date) return "Just now";
 
     const now = new Date();
-    const diff = Math.floor((now - date) / 1000); // difference in seconds
+    const diff = Math.floor((now - date) / 1000);
 
     if (diff < 60) return "Just now";
     if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
@@ -322,7 +319,6 @@ const Header = ({ setIsOpen }) => {
       setUnreadCount(0);
     } catch (error) {
       console.error("Error marking notifications as read:", error);
-      // Still update UI even if Firebase update fails
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
     }
@@ -337,7 +333,6 @@ const Header = ({ setIsOpen }) => {
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (error) {
       console.error("Error marking notification as read:", error);
-      // Still update UI even if Firebase update fails
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n))
       );
@@ -406,7 +401,7 @@ const Header = ({ setIsOpen }) => {
             </div>
           </div>
 
-          {/* Quick Stats - Static */}
+          {/* Quick Stats */}
           <div className="hidden xl:flex items-center space-x-3 ml-4">
             <div className="px-3 py-1.5 bg-green-50 rounded-lg border border-green-100">
               <div className="flex items-center space-x-1.5">
@@ -519,7 +514,7 @@ const Header = ({ setIsOpen }) => {
             )}
           </div>
 
-          {/* User Profile Section - NO DROPDOWN */}
+          {/* User Profile Section */}
           <div className="flex items-center space-x-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl px-4 py-2.5 border border-gray-100 ml-2">
             <img
               src={currentUser.avatar}

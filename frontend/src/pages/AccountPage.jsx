@@ -29,7 +29,9 @@ const AccountPage = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const [formData, setFormData] = useState({
-    // Personal Information (read-only, managed by PersonalInformation component)
+    // Personal Information
+    firstName: "",
+    lastName: "",
     dateOfBirth: "",
 
     // Contact Information
@@ -82,6 +84,8 @@ const AccountPage = () => {
             // Populate form with existing data
             setFormData((prev) => ({
               ...prev,
+              firstName: customerData.firstName || "",
+              lastName: customerData.lastName || "",
               dateOfBirth: customerData.dateOfBirth || "",
               primaryPhone: customerData.phoneNumber || "",
               alternativePhone: customerData.alternativePhone || "",
@@ -187,7 +191,9 @@ const AccountPage = () => {
       const updateData = {
         firebaseUid: currentUser.uid,
         email: currentUser.email,
-        fullName: currentUser.displayName || "",
+        fullName: `${formData.firstName} ${formData.lastName}`.trim(),
+        firstName: formData.firstName,
+        lastName: formData.lastName,
         dateOfBirth: formData.dateOfBirth,
         phoneNumber: formData.primaryPhone,
         alternativePhone: formData.alternativePhone,
@@ -246,6 +252,8 @@ const AccountPage = () => {
 
   const isFormValid = () => {
     const required = [
+      "firstName",
+      "lastName",
       "dateOfBirth",
       "primaryPhone",
       "streetAddress",
@@ -414,9 +422,9 @@ const AccountPage = () => {
         {/* Information note with ProfilePage styling */}
         <div className="mt-6 p-4 bg-blue-900/20 border border-blue-700/30 rounded-2xl backdrop-blur-sm shadow-xl">
           <p className="text-sm text-blue-200/80 text-center">
-            <strong className="text-blue-300">Note:</strong> Your name and email
-            are automatically synced from your account and cannot be changed
-            here. Contact support if you need to update this information.
+            <strong className="text-blue-300">Note:</strong> Your email is
+            automatically synced from your account and cannot be changed here.
+            Contact support if you need to update your email address.
           </p>
         </div>
       </div>

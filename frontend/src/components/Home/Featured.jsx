@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Star, ArrowRight, ShoppingCart, Eye, Sparkles } from "lucide-react";
+import {
+  Star,
+  ArrowRight,
+  ShoppingCart,
+  Eye,
+  Sparkles,
+  Zap,
+  TrendingUp,
+  Award,
+} from "lucide-react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { firestore } from "../../firebase";
 import { useNavigate } from "react-router-dom";
@@ -29,7 +38,6 @@ export default function Featured() {
     try {
       setLoading(true);
 
-      // Fetch featured products that are approved and active
       const productsRef = collection(firestore, "products");
       const q = query(
         productsRef,
@@ -45,7 +53,6 @@ export default function Featured() {
         ...doc.data(),
       }));
 
-      // Fetch all reviews to calculate ratings
       const reviewsRef = collection(firestore, "reviews");
       const reviewsQuery = query(
         reviewsRef,
@@ -53,7 +60,6 @@ export default function Featured() {
       );
       const reviewsSnapshot = await getDocs(reviewsQuery);
 
-      // Calculate review stats for each product
       const stats = {};
       reviewsSnapshot.docs.forEach((doc) => {
         const review = doc.data();
@@ -199,21 +205,16 @@ export default function Featured() {
   };
 
   const renderStars = (rating) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-
-    for (let i = 0; i < 5; i++) {
-      stars.push(
-        <Star
-          key={i}
-          className={`w-4 h-4 ${
-            i < fullStars ? "text-yellow-400 fill-current" : "text-gray-500"
-          }`}
-        />
-      );
-    }
-
-    return stars;
+    return Array.from({ length: 5 }, (_, i) => (
+      <Star
+        key={i}
+        className={`w-4 h-4 transition-all duration-300 ${
+          i < Math.floor(rating)
+            ? "text-amber-400 fill-amber-400"
+            : "text-gray-600"
+        }`}
+      />
+    ));
   };
 
   const getProductRating = (productId) => {
@@ -242,20 +243,39 @@ export default function Featured() {
     const stats = reviewStats[product.id];
     const isNew = isNewProduct(product.createdAt);
 
-    // Priority: New > High Rating > Default
     if (isNew) {
-      return { text: "NEW", color: "from-emerald-500 to-teal-500" };
+      return {
+        text: "NEW",
+        icon: Sparkles,
+        gradient: "from-emerald-400 via-teal-400 to-cyan-400",
+        glow: "shadow-emerald-500/50",
+      };
     }
 
     if (stats && stats.count >= 5 && stats.totalRating / stats.count >= 4.5) {
-      return { text: "POPULAR", color: "from-orange-500 to-red-500" };
+      return {
+        text: "POPULAR",
+        icon: TrendingUp,
+        gradient: "from-orange-400 via-red-400 to-pink-400",
+        glow: "shadow-orange-500/50",
+      };
     }
 
     if (stats && stats.count >= 10) {
-      return { text: "BEST SELLER", color: "from-blue-500 to-cyan-500" };
+      return {
+        text: "BEST SELLER",
+        icon: Award,
+        gradient: "from-blue-400 via-indigo-400 to-purple-400",
+        glow: "shadow-blue-500/50",
+      };
     }
 
-    return { text: "FEATURED", color: "from-purple-500 to-pink-500" };
+    return {
+      text: "FEATURED",
+      icon: Zap,
+      gradient: "from-purple-400 via-fuchsia-400 to-pink-400",
+      glow: "shadow-purple-500/50",
+    };
   };
 
   const formatPrice = (price) => {
@@ -263,27 +283,35 @@ export default function Featured() {
   };
 
   const EmptyState = () => (
-    <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-400">
-      <div className="w-24 h-24 mb-6 bg-gradient-to-br from-gray-800/60 to-gray-900/80 rounded-full flex items-center justify-center border border-gray-700/50">
-        <ShoppingCart className="w-12 h-12 text-gray-500" />
+    <div className="col-span-full flex flex-col items-center justify-center py-20">
+      <div className="relative">
+        <div className="w-32 h-32 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full flex items-center justify-center backdrop-blur-xl border border-purple-500/30">
+          <ShoppingCart className="w-16 h-16 text-purple-400" />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full blur-2xl animate-pulse"></div>
       </div>
-      <h3 className="text-2xl font-bold text-white mb-2">
-        No Featured Products
+      <h3 className="text-3xl font-bold text-white mt-8 mb-3">
+        No Featured Products Yet
       </h3>
-      <p className="text-lg text-center max-w-sm">
-        Products will appear here once they are marked as featured in the admin
-        panel.
+      <p className="text-lg text-gray-400 text-center max-w-md">
+        Amazing products will appear here once they're featured by our team
       </p>
     </div>
   );
 
   if (loading) {
     return (
-      <section className="py-24 bg-gradient-to-b from-black via-gray-900 to-black">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+      <section className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-900 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-900/5 via-transparent to-blue-900/5"></div>
+        <div className="max-w-7xl mx-auto px-6 lg:px-8 py-24 relative">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
-            <p className="text-white/60 mt-4">Loading featured products...</p>
+            <div className="relative inline-flex">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500/30 border-t-purple-500"></div>
+              <div className="absolute inset-0 rounded-full bg-purple-500/20 blur-xl animate-pulse"></div>
+            </div>
+            <p className="text-gray-400 mt-6 text-lg">
+              Curating featured products...
+            </p>
           </div>
         </div>
       </section>
@@ -291,76 +319,67 @@ export default function Featured() {
   }
 
   return (
-    <section className="py-24 bg-gradient-to-b from-black via-gray-900 to-black relative overflow-hidden">
-      {/* Animated background elements - pointer-events-none */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div
-          className="absolute bottom-20 right-10 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: "1s" }}
-        ></div>
-        <div
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-pink-500/5 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: "2s" }}
-        ></div>
+    <section className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-900 relative overflow-hidden">
+      {/* Animated background particles */}
+      <div className="absolute inset-0">
+        <div className="absolute top-10 left-10 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+        <div className="absolute top-32 right-20 w-1 h-1 bg-pink-400 rounded-full animate-ping"></div>
+        <div className="absolute bottom-20 left-1/4 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+        <div className="absolute top-1/2 right-1/3 w-1 h-1 bg-yellow-400 rounded-full animate-ping"></div>
+        <div className="absolute bottom-32 right-10 w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
+        <div className="absolute top-1/4 left-1/3 w-1 h-1 bg-orange-400 rounded-full animate-ping"></div>
       </div>
 
-      {/* Floating particles effect - pointer-events-none */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-2 h-2 bg-white/20 rounded-full animate-pulse"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-              animationDuration: `${2 + Math.random() * 3}s`,
-            }}
-          ></div>
-        ))}
-      </div>
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-r from-purple-900/5 via-transparent to-blue-900/5"></div>
 
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
-        {/* Header */}
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-24 relative z-10">
+        {/* Enhanced Header */}
         <div
-          className={`text-center mb-16 transition-all duration-1000 ${
+          className={`text-center mb-20 transition-all duration-1000 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <div className="inline-flex items-center gap-2 bg-purple-500/10 backdrop-blur-sm px-4 py-2 rounded-full mb-4">
-            <Sparkles className="w-4 h-4 text-purple-400" />
-            <p className="text-sm font-bold uppercase tracking-widest text-purple-400">
-              Featured Products
-            </p>
-          </div>
-          <h2 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 relative">
-            <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent animate-pulse bg-300% animate-gradient-x">
-              Featured Rentals
+          <div className="inline-flex items-center gap-2.5 bg-gradient-to-r from-purple-500/10 via-fuchsia-500/10 to-pink-500/10 backdrop-blur-xl px-6 py-3 rounded-full mb-6 border border-purple-500/20">
+            <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
+            <span className="text-sm font-bold uppercase tracking-widest bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Featured Collection
             </span>
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 via-pink-400/20 to-purple-400/20 blur-2xl -z-10 pointer-events-none"></div>
+          </div>
+
+          <h2 className="text-6xl md:text-7xl lg:text-8xl font-black mb-6 relative">
+            <span className="bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
+              Premium
+            </span>
+            <br />
+            <span className="bg-gradient-to-r from-purple-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent animate-gradient-x bg-300%">
+              Rentals
+            </span>
           </h2>
-          <p className="text-xl md:text-2xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
-            Our most popular cameras and gear — ready for your next capture
+
+          <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto leading-relaxed font-light">
+            Handpicked gear trusted by professionals worldwide
           </p>
 
-          {/* Decorative line */}
-          <div className="flex justify-center mt-8">
-            <div className="h-1 w-24 bg-gradient-to-r from-transparent via-purple-500 to-transparent rounded-full"></div>
+          <div className="flex items-center justify-center gap-3 mt-8">
+            <div className="h-1 w-16 bg-gradient-to-r from-transparent via-purple-500 to-transparent rounded-full"></div>
+            <div className="h-2 w-2 rounded-full bg-purple-500"></div>
+            <div className="h-1 w-16 bg-gradient-to-r from-transparent via-pink-500 to-transparent rounded-full"></div>
           </div>
         </div>
 
         {/* Products Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 min-h-[400px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {products.length > 0 ? (
             products.map((product, index) => {
               const { rating, count } = getProductRating(product.id);
               const badge = getBadgeInfo(product);
+              const BadgeIcon = badge.icon;
 
               return (
                 <div
                   key={product.id}
-                  className={`group relative overflow-hidden transition-all duration-700 ${
+                  className={`group relative transition-all duration-700 ${
                     isVisible
                       ? "opacity-100 translate-y-0"
                       : "opacity-0 translate-y-12"
@@ -369,18 +388,16 @@ export default function Featured() {
                   onMouseEnter={() => setHoveredCard(index)}
                   onMouseLeave={() => setHoveredCard(null)}
                 >
-                  {/* Card background */}
-                  <div className="relative bg-gradient-to-br from-gray-800/60 via-gray-900/80 to-black/90 rounded-3xl border border-gray-700/50 group-hover:border-purple-500/50 transition-all duration-500 hover:transform hover:scale-105 hover:shadow-2xl backdrop-blur-sm h-full overflow-hidden">
-                    {/* Animated border glow - pointer-events-none */}
-                    <div className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-purple-500/20 blur-sm -z-10 pointer-events-none"></div>
-
-                    {/* Hover overlay effect - pointer-events-none */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-all duration-500 pointer-events-none"></div>
+                  <div className="relative bg-gradient-to-br from-slate-900/90 via-slate-800/50 to-slate-900/90 rounded-3xl border border-slate-700/50 group-hover:border-purple-500/50 transition-all duration-500 hover:transform hover:-translate-y-2 hover:shadow-2xl hover:shadow-purple-500/20 backdrop-blur-xl overflow-hidden h-full">
+                    {/* Glow effect on hover */}
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 rounded-3xl opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-500 pointer-events-none"></div>
 
                     {/* Product Image */}
-                    <div className="relative h-64 overflow-hidden rounded-t-3xl bg-gradient-to-br from-gray-700 to-gray-800">
+                    <div className="relative h-72 overflow-hidden rounded-t-3xl bg-gradient-to-br from-slate-800 to-slate-900">
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent z-10 pointer-events-none"></div>
+
                       <img
-                        className="w-full h-full object-contain p-6 group-hover:scale-110 transition-transform duration-700 pointer-events-none"
+                        className="w-full h-full object-contain p-8 group-hover:scale-110 transition-transform duration-700"
                         src={product.imageUrl}
                         alt={product.name}
                         onError={(e) => {
@@ -389,18 +406,21 @@ export default function Featured() {
                         }}
                       />
 
-                      {/* Badge */}
+                      {/* Enhanced Badge */}
                       <div
-                        className={`absolute top-4 left-4 px-3 py-1 bg-gradient-to-r ${badge.color} rounded-full text-white text-xs font-bold uppercase tracking-wide shadow-lg pointer-events-none`}
+                        className={`absolute top-5 left-5 flex items-center gap-2 px-4 py-2 bg-gradient-to-r ${badge.gradient} rounded-full shadow-lg ${badge.glow} backdrop-blur-sm z-20`}
                       >
-                        {badge.text}
+                        <BadgeIcon className="w-4 h-4 text-white" />
+                        <span className="text-white text-xs font-bold uppercase tracking-wide">
+                          {badge.text}
+                        </span>
                       </div>
 
-                      {/* Hover actions */}
-                      <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0 z-20">
+                      {/* Quick View Button */}
+                      <div className="absolute top-5 right-5 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-4 group-hover:translate-x-0">
                         <button
                           onClick={() => navigate("/products")}
-                          className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-purple-500 transition-colors duration-200"
+                          className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-purple-500 hover:scale-110 transition-all duration-200 border border-white/20"
                         >
                           <Eye className="w-5 h-5 text-white" />
                         </button>
@@ -408,66 +428,61 @@ export default function Featured() {
                     </div>
 
                     {/* Product Info */}
-                    <div className="p-6 relative z-10">
-                      <div className="flex items-baseline mb-2">
-                        <div className="text-gray-400 text-xs uppercase font-semibold tracking-wide">
+                    <div className="p-7 relative">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs uppercase font-bold tracking-widest text-purple-400">
                           {product.brand}
-                        </div>
+                        </span>
+                        {product.category && (
+                          <span className="text-xs bg-purple-500/20 text-purple-300 px-3 py-1 rounded-full border border-purple-500/30">
+                            {product.category}
+                          </span>
+                        )}
                       </div>
 
-                      <h3 className="text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors duration-300 line-clamp-2">
+                      <h3 className="text-xl font-bold text-white mb-4 group-hover:text-purple-300 transition-colors duration-300 line-clamp-2 leading-tight">
                         {product.name}
                       </h3>
 
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <span className="text-2xl font-bold text-white">
+                      {/* Rating */}
+                      <div className="flex items-center gap-3 mb-5">
+                        <div className="flex items-center gap-1">
+                          {renderStars(parseFloat(rating))}
+                        </div>
+                        <span className="text-sm text-gray-400 font-medium">
+                          {count > 0 ? `${rating} (${count})` : "No reviews"}
+                        </span>
+                      </div>
+
+                      {/* Price */}
+                      <div className="mb-6 pb-6 border-b border-slate-700/50">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                             {formatPrice(product.price)}
                           </span>
-                          <span className="text-gray-400 text-sm ml-1">
+                          <span className="text-gray-500 text-sm font-medium">
                             / day
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center">
-                            {renderStars(parseFloat(rating))}
-                          </div>
-                          <span className="text-gray-400 text-sm">
-                            {count > 0 ? `(${count})` : "(No reviews)"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Category badge */}
-                      {product.category && (
-                        <div className="mb-4">
-                          <span className="text-xs bg-white/10 text-white/80 px-2 py-1 rounded">
-                            {product.category}
-                          </span>
-                          {product.subCategory && (
-                            <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded ml-1">
-                              {product.subCategory}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
                       {/* Action Buttons */}
-                      <div className="space-y-2 relative z-20">
+                      <div className="space-y-3">
                         <button
                           onClick={() => handleRentNow(product)}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-white font-semibold text-sm hover:scale-105 transition-all duration-300"
+                          className="w-full group/btn relative px-6 py-3.5 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 rounded-xl text-white font-bold text-sm overflow-hidden hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300"
                         >
-                          Rent Now
+                          <span className="relative z-10 flex items-center justify-center gap-2">
+                            Rent Now
+                            <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform duration-300" />
+                          </span>
+                          <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300"></div>
                         </button>
 
                         <button
                           onClick={() => handleAddToCart(product)}
                           disabled={isAddingToCart[product.id]}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 rounded-lg text-white font-medium text-sm hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 hover:border-purple-500/50 rounded-xl text-white font-semibold text-sm transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm"
                         >
                           {isAddingToCart[product.id] ? (
                             <>
@@ -484,20 +499,8 @@ export default function Featured() {
                       </div>
                     </div>
 
-                    {/* Floating elements - pointer-events-none */}
-                    <div className="absolute -top-2 -right-2 w-4 h-4 bg-purple-500/30 rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-ping transition-opacity duration-300 pointer-events-none"></div>
-                    <div
-                      className="absolute -bottom-2 -left-2 w-3 h-3 bg-pink-500/30 rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity duration-300 pointer-events-none"
-                      style={{ animationDelay: "0.5s" }}
-                    ></div>
-
-                    {/* Interactive arrow - pointer-events-none */}
-                    <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:transform group-hover:translate-x-1 pointer-events-none">
-                      <ArrowRight className="w-5 h-5 text-purple-400" />
-                    </div>
-
-                    {/* Shimmer effect - pointer-events-none */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -skew-x-12 transform translate-x-full group-hover:-translate-x-full transition-transform duration-1000 pointer-events-none"></div>
+                    {/* Shimmer effect */}
+                    <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none"></div>
                   </div>
                 </div>
               );
@@ -507,10 +510,10 @@ export default function Featured() {
           )}
         </div>
 
-        {/* Call to action section */}
+        {/* CTA Section */}
         {products.length > 0 && (
           <div
-            className={`text-center mt-16 transition-all duration-1000 ${
+            className={`text-center mt-20 transition-all duration-1000 ${
               isVisible
                 ? "opacity-100 translate-y-0"
                 : "opacity-0 translate-y-8"
@@ -519,13 +522,14 @@ export default function Featured() {
           >
             <button
               onClick={() => navigate("/productsPage")}
-              className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-white font-semibold text-lg hover:scale-105 hover:shadow-xl hover:shadow-purple-500/25 transition-all duration-300 overflow-hidden z-10"
+              className="group relative px-10 py-5 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 rounded-2xl text-white font-bold text-lg overflow-hidden hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 hover:-translate-y-1"
             >
-              <span className="relative z-10 flex items-center gap-2">
-                Browse All Products
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
+              <span className="relative z-10 flex items-center gap-3">
+                Explore Full Catalog
+                <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
               </span>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 transform translate-x-full group-hover:-translate-x-full transition-transform duration-700 pointer-events-none"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none"></div>
             </button>
           </div>
         )}
@@ -544,7 +548,6 @@ export default function Featured() {
 
         .animate-gradient-x {
           animation: gradient-x 3s ease infinite;
-          background-size: 200% 200%;
         }
 
         .bg-300\% {
